@@ -66,6 +66,22 @@ struct HeadTrackingDisplayState: Equatable {
     var lastSendText: String
     var warningText: String?
 
+    init(
+        isUDPConfigured: Bool,
+        udpConfiguredText: String,
+        packetRateText: String,
+        packetsSentText: String,
+        lastSendText: String,
+        warningText: String?
+    ) {
+        self.isUDPConfigured = isUDPConfigured
+        self.udpConfiguredText = udpConfiguredText
+        self.packetRateText = packetRateText
+        self.packetsSentText = packetsSentText
+        self.lastSendText = lastSendText
+        self.warningText = warningText
+    }
+
     static let idle = HeadTrackingDisplayState(
         isUDPConfigured: false,
         udpConfiguredText: "No",
