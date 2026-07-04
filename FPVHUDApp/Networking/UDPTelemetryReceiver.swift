@@ -128,19 +128,20 @@ final class UDPTelemetryReceiver: TelemetrySource {
             age = 0
         }
 
-        if age > 3 {
+        switch TelemetryFreshness.evaluate(age: age) {
+        case .dataLost:
             latestState.linkState = .disconnected
             latestState.warningText = "TELEMETRY DATA LOST >3S"
             latestState.staleDataWarnings = mergedWarnings(latestState.staleDataWarnings, adding: .telemetry)
             onTelemetry?(latestState)
             emitStatus(warningText: "Telemetry data lost")
-        } else if age > 1 {
+        case .staleWarning:
             latestState.linkState = .degraded
             latestState.warningText = "TELEMETRY STALE >1S"
             latestState.staleDataWarnings = mergedWarnings(latestState.staleDataWarnings, adding: .telemetry)
             onTelemetry?(latestState)
             emitStatus(warningText: "Telemetry stale")
-        } else {
+        case .live:
             emitStatus()
         }
     }

@@ -22,6 +22,32 @@ struct HeadTrackingPacket: Codable, Equatable {
     }
 }
 
+struct HeadTrackingPacketFactory {
+    private(set) var sequence: UInt32 = 0
+
+    mutating func makePacket(
+        yawDeg: Double,
+        pitchDeg: Double,
+        rollDeg: Double,
+        trackingEnabled: Bool,
+        centered: Bool,
+        timeoutMs: UInt16,
+        timestampMs: UInt64? = nil
+    ) -> HeadTrackingPacket {
+        sequence &+= 1
+        return HeadTrackingPacket(
+            seq: sequence,
+            timestampMs: timestampMs ?? UInt64(Date().timeIntervalSince1970 * 1000),
+            yawDeg: yawDeg,
+            pitchDeg: pitchDeg,
+            rollDeg: rollDeg,
+            trackingEnabled: trackingEnabled,
+            centered: centered,
+            timeoutMs: timeoutMs
+        )
+    }
+}
+
 struct HeadTrackingSenderStatus: Equatable {
     var isConfigured: Bool = false
     var packetsSent: UInt64 = 0

@@ -69,6 +69,63 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertFalse(HeadTrackingSafety.canSend(status: error))
     }
 
+    func testHeadTrackingSafetyBlocksAgainAfterCalibrationReset() {
+        let now = Date()
+        let active = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: true,
+            sampleTimestamp: now,
+            now: now
+        )
+        let afterReset = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: false,
+            sampleTimestamp: now,
+            now: now
+        )
+
+        XCTAssertTrue(HeadTrackingSafety.canSend(status: active))
+        XCTAssertEqual(afterReset, .readyNotCentered)
+        XCTAssertFalse(HeadTrackingSafety.canSend(status: afterReset))
+    }
+
+    func testTelemetryFreshnessThresholds() {
+        XCTAssertEqual(TelemetryFreshness.evaluate(age: 0.25), .live)
+        XCTAssertEqual(TelemetryFreshness.evaluate(age: 1.01), .staleWarning)
+        XCTAssertEqual(TelemetryFreshness.evaluate(age: 3.01), .dataLost)
+    }
+
+    func testHeadTrackingPacketFactoryIncrementsSequenceAndAddsTimestamp() {
+        var factory = HeadTrackingPacketFactory()
+
+        let first = factory.makePacket(
+            yawDeg: -12.5,
+            pitchDeg: 6.8,
+            rollDeg: 1.2,
+            trackingEnabled: true,
+            centered: true,
+            timeoutMs: 250
+        )
+        let second = factory.makePacket(
+            yawDeg: -1,
+            pitchDeg: 2,
+            rollDeg: 3,
+            trackingEnabled: false,
+            centered: false,
+            timeoutMs: 250
+        )
+
+        XCTAssertEqual(first.seq, 1)
+        XCTAssertEqual(second.seq, 2)
+        XCTAssertGreaterThan(first.timestampMs, 0)
+        XCTAssertGreaterThanOrEqual(second.timestampMs, first.timestampMs)
+        XCTAssertEqual(first.yawDeg, -12.5)
+        XCTAssertEqual(first.pitchDeg, 6.8)
+        XCTAssertEqual(first.rollDeg, 1.2)
+        XCTAssertTrue(first.trackingEnabled)
+        XCTAssertFalse(second.trackingEnabled)
+    }
+
     func testHeadTrackingPacketEncodesDebugJSONShape() throws {
         let packet = HeadTrackingPacket(
             seq: 7,
@@ -141,6 +198,36 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(state.mode, .udp)
         XCTAssertNil(state.warningText)
         XCTAssertEqual(state.staleDataWarnings, [.speed, .flightMode])
+    }
+
+    func testIncomingTelemetryMissingOptionalFieldsDoesNotCrashAndKeepsPreviousValues() throws {
+        let json = """
+        {
+          "battery_v": 7.5
+        }
+        """.data(using: .utf8)!
+
+        let packet = try JSONDecoder().decode(IncomingTelemetryPacket.self, from: json)
+        let state = packet.merged(with: .demo)
+
+        XCTAssertEqual(state.batteryVoltage, 7.5)
+        XCTAssertEqual(state.rssiDbm, TelemetryState.demo.rssiDbm)
+        XCTAssertEqual(state.snrDb, TelemetryState.demo.snrDb)
+        XCTAssertEqual(state.linkQualityPercent, TelemetryState.demo.linkQualityPercent)
+        XCTAssertEqual(state.speedKmh, TelemetryState.demo.speedKmh)
+        XCTAssertEqual(state.driveMode, TelemetryState.demo.driveMode)
+        XCTAssertEqual(state.mode, .udp)
+    }
+
+    func testIncomingTelemetryMalformedJSONIsRejected() {
+        let json = """
+        {
+          "battery_v": "not-a-number",
+          "link_quality": 80
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertThrowsError(try JSONDecoder().decode(IncomingTelemetryPacket.self, from: json))
     }
 
     func testIncomingTelemetryClampsControlValues() throws {

@@ -16,6 +16,24 @@ struct TelemetryReceiverStatus: Equatable {
     static let idle = TelemetryReceiverStatus()
 }
 
+enum TelemetryFreshness: Equatable {
+    case live
+    case staleWarning
+    case dataLost
+
+    static func evaluate(age: TimeInterval) -> TelemetryFreshness {
+        if age > 3 {
+            return .dataLost
+        }
+
+        if age > 1 {
+            return .staleWarning
+        }
+
+        return .live
+    }
+}
+
 struct IncomingTelemetryPacket: Decodable {
     var timestampMs: UInt64?
     var batteryVoltage: Double?

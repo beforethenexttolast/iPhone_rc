@@ -5,7 +5,7 @@ final class HeadTrackingSender {
     var onStatus: ((HeadTrackingSenderStatus) -> Void)?
 
     private var connection: NWConnection?
-    private var sequence: UInt32 = 0
+    private var packetFactory = HeadTrackingPacketFactory()
     private var packetsSent: UInt64 = 0
     private var sendTimestamps: [Date] = []
     private var lastSendAt: Date?
@@ -79,11 +79,7 @@ final class HeadTrackingSender {
             return
         }
 
-        sequence &+= 1
-
-        let packet = HeadTrackingPacket(
-            seq: sequence,
-            timestampMs: UInt64(Date().timeIntervalSince1970 * 1000),
+        let packet = packetFactory.makePacket(
             yawDeg: yawDeg,
             pitchDeg: pitchDeg,
             rollDeg: rollDeg,
