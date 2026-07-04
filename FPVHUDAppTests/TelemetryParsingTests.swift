@@ -2,6 +2,61 @@ import XCTest
 @testable import FPVHUDApp
 
 final class TelemetryParsingTests: XCTestCase {
+    func testSettingsStoreReturnsSafeDefaultsWhenEmpty() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+
+        let settings = store.load()
+
+        XCTAssertEqual(settings, .defaults)
+        XCTAssertTrue(settings.demoModeEnabled)
+        XCTAssertFalse(settings.trackingEnabled)
+    }
+
+    func testSettingsStoreSavesAndLoadsExposedSettings() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+        let settings = AppSettings(
+            windowsHost: "10.0.0.42",
+            telemetryPort: 6001,
+            headTrackingPort: 6002,
+            motionUpdateHz: 90,
+            headTrackingSendHz: 45,
+            headTrackingTimeoutMs: 350,
+            trackingEnabled: true,
+            demoModeEnabled: false
+        )
+
+        store.save(settings)
+
+        XCTAssertEqual(store.load(), settings)
+    }
+
+    func testSettingsStoreResetRestoresDefaults() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+        var settings = AppSettings.defaults
+        settings.windowsHost = "10.0.0.99"
+        settings.demoModeEnabled = false
+        settings.trackingEnabled = true
+        store.save(settings)
+
+        let reset = store.reset()
+
+        XCTAssertEqual(reset, .defaults)
+        XCTAssertEqual(store.load(), .defaults)
+        XCTAssertTrue(store.load().demoModeEnabled)
+        XCTAssertFalse(store.load().trackingEnabled)
+    }
+
+    func testSettingsStoreFallsBackToDefaultsForCorruptData() {
+        let defaults = makeIsolatedDefaults()
+        defaults.set(Data([0x00, 0x01, 0x02]), forKey: SettingsStore.storageKey)
+        let store = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.load(), .defaults)
+    }
+
     func testHeadTrackingTimingClampsSendRate() {
         XCTAssertEqual(HeadTrackingTiming.clampedSendRateHz(10), 30)
         XCTAssertEqual(HeadTrackingTiming.clampedSendRateHz(45), 45)
@@ -264,5 +319,12 @@ final class TelemetryParsingTests: XCTestCase {
 
         XCTAssertEqual(state.panTiltMode, .headTracking)
         XCTAssertEqual(state.driveMode, .gearbox)
+    }
+
+    private func makeIsolatedDefaults() -> UserDefaults {
+        let suiteName = "FPVHUDAppTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
     }
 }

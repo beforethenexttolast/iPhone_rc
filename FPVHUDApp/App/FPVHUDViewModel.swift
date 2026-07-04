@@ -13,6 +13,7 @@ final class FPVHUDViewModel: ObservableObject {
     private let udpTelemetry = UDPTelemetryReceiver()
     private let motionService: MotionService
     private let headTrackingSender = HeadTrackingSender()
+    private let settingsStore: SettingsStore
 
     private var rawYawDeg: Double = 0
     private var rawPitchDeg: Double = 0
@@ -27,14 +28,18 @@ final class FPVHUDViewModel: ObservableObject {
     private var hasCenteredTracking = false
 
     init(
-        motionService: MotionService = MotionServiceFactory.makeDefault()
+        motionService: MotionService = MotionServiceFactory.makeDefault(),
+        settingsStore: SettingsStore = SettingsStore()
     ) {
         self.motionService = motionService
+        self.settingsStore = settingsStore
+        self.settings = settingsStore.load()
         bindServices()
         applySettings()
     }
 
     func applySettings() {
+        settingsStore.save(settings)
         headTrackingSender.configure(
             host: settings.windowsHost,
             port: UInt16(clamping: settings.headTrackingPort)
@@ -53,6 +58,12 @@ final class FPVHUDViewModel: ObservableObject {
         motionService.start(updateRateHz: Double(settings.motionUpdateHz))
         startMotionStatusTimer()
         updateMotionState()
+    }
+
+    func resetSettingsToDefaults() {
+        settings = settingsStore.reset()
+        resetTrackingCalibration()
+        applySettings()
     }
 
     func centerTracking() {

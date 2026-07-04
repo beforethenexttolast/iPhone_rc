@@ -76,6 +76,21 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 - Core Motion interface with real-device and simulator/mock implementations.
 - UDP head-tracking sender stub with center/calibrate support.
 - Settings/debug sheet for host, ports, demo mode, and tracking enable.
+- UserDefaults-backed settings persistence with reset-to-defaults.
+
+## Settings Persistence
+
+The app persists runtime settings with `SettingsStore`:
+
+- Windows host IP.
+- Telemetry UDP port.
+- Head-tracking UDP port.
+- Motion and head-tracking send rates.
+- Head-tracking packet timeout.
+- Demo mode enabled/disabled.
+- Tracking enabled/disabled.
+
+Defaults are intentionally conservative: demo mode defaults on, and head tracking defaults off. Calibration is not persisted across launches; use `Center / calibrate` after mounting the phone before head-tracking packets are allowed to send. The settings/debug panel includes `Reset settings to defaults`.
 
 ## Telemetry Snapshot
 

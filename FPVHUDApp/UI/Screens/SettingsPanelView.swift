@@ -47,6 +47,12 @@ struct SettingsPanelView: View {
                         in: 100...1000,
                         step: 50
                     )
+
+                    Button(role: .destructive) {
+                        viewModel.resetSettingsToDefaults()
+                    } label: {
+                        Label("Reset settings to defaults", systemImage: "arrow.counterclockwise")
+                    }
                 }
 
                 Section("Telemetry receiver") {
