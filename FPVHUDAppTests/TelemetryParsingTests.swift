@@ -181,6 +181,26 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertFalse(second.trackingEnabled)
     }
 
+    func testHeadTrackingDisplayStateMapsSenderStatusForUI() {
+        let now = Date()
+        let status = HeadTrackingSenderStatus(
+            isConfigured: true,
+            packetsSent: 12,
+            packetRateHz: 45,
+            lastSendAt: now.addingTimeInterval(-0.5),
+            lastErrorText: "send failed"
+        )
+
+        let display = HeadTrackingDisplayState(senderStatus: status, now: now)
+
+        XCTAssertTrue(display.isUDPConfigured)
+        XCTAssertEqual(display.udpConfiguredText, "Yes")
+        XCTAssertEqual(display.packetRateText, "45 Hz")
+        XCTAssertEqual(display.packetsSentText, "12")
+        XCTAssertEqual(display.lastSendText, "0.50s ago")
+        XCTAssertEqual(display.warningText, "send failed")
+    }
+
     func testHeadTrackingPacketEncodesDebugJSONShape() throws {
         let packet = HeadTrackingPacket(
             seq: 7,

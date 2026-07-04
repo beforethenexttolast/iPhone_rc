@@ -57,3 +57,35 @@ struct HeadTrackingSenderStatus: Equatable {
 
     static let idle = HeadTrackingSenderStatus()
 }
+
+struct HeadTrackingDisplayState: Equatable {
+    var isUDPConfigured: Bool
+    var udpConfiguredText: String
+    var packetRateText: String
+    var packetsSentText: String
+    var lastSendText: String
+    var warningText: String?
+
+    static let idle = HeadTrackingDisplayState(
+        isUDPConfigured: false,
+        udpConfiguredText: "No",
+        packetRateText: "0 Hz",
+        packetsSentText: "0",
+        lastSendText: "Never",
+        warningText: nil
+    )
+
+    init(senderStatus: HeadTrackingSenderStatus, now: Date = Date()) {
+        isUDPConfigured = senderStatus.isConfigured
+        udpConfiguredText = senderStatus.isConfigured ? "Yes" : "No"
+        packetRateText = String(format: "%.0f Hz", senderStatus.packetRateHz)
+        packetsSentText = "\(senderStatus.packetsSent)"
+        warningText = senderStatus.lastErrorText
+
+        if let lastSendAt = senderStatus.lastSendAt {
+            lastSendText = String(format: "%.2fs ago", now.timeIntervalSince(lastSendAt))
+        } else {
+            lastSendText = "Never"
+        }
+    }
+}

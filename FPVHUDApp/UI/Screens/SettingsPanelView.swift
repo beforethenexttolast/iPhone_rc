@@ -106,32 +106,32 @@ struct SettingsPanelView: View {
                     HStack {
                         Text("UDP configured")
                         Spacer()
-                        Text(viewModel.headTrackingSenderStatus.isConfigured ? "Yes" : "No")
-                            .foregroundStyle(viewModel.headTrackingSenderStatus.isConfigured ? .green : .secondary)
+                        Text(viewModel.headTrackingDisplay.udpConfiguredText)
+                            .foregroundStyle(viewModel.headTrackingDisplay.isUDPConfigured ? .green : .secondary)
                     }
 
                     HStack {
                         Text("Packet rate")
                         Spacer()
-                        Text(String(format: "%.0f Hz", viewModel.headTrackingSenderStatus.packetRateHz))
+                        Text(viewModel.headTrackingDisplay.packetRateText)
                             .monospacedDigit()
                     }
 
                     HStack {
                         Text("Packets sent")
                         Spacer()
-                        Text("\(viewModel.headTrackingSenderStatus.packetsSent)")
+                        Text(viewModel.headTrackingDisplay.packetsSentText)
                             .monospacedDigit()
                     }
 
                     HStack {
                         Text("Last send")
                         Spacer()
-                        Text(lastHeadTrackingSendText)
+                        Text(viewModel.headTrackingDisplay.lastSendText)
                             .monospacedDigit()
                     }
 
-                    if let error = viewModel.headTrackingSenderStatus.lastErrorText {
+                    if let error = viewModel.headTrackingDisplay.warningText {
                         Text(error)
                             .foregroundStyle(.orange)
                     }
@@ -224,11 +224,6 @@ struct SettingsPanelView: View {
         return String(format: "%.2fs", age)
     }
 
-    private var lastHeadTrackingSendText: String {
-        guard let date = viewModel.headTrackingSenderStatus.lastSendAt else { return "Never" }
-        let age = Date().timeIntervalSince(date)
-        return String(format: "%.2fs ago", age)
-    }
 }
 
 private extension View {

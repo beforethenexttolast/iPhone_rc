@@ -9,7 +9,7 @@ struct RootView: View {
                 telemetry: viewModel.telemetry,
                 motion: viewModel.motion,
                 settings: viewModel.settings,
-                headTrackingSenderStatus: viewModel.headTrackingSenderStatus
+                headTrackingDisplay: viewModel.headTrackingDisplay
             )
 
             Button {

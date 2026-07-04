@@ -6,7 +6,7 @@ final class FPVHUDViewModel: ObservableObject {
     @Published var motion: MotionState = .zero
     @Published var settings = AppSettings()
     @Published var telemetryStatus: TelemetryReceiverStatus = .idle
-    @Published var headTrackingSenderStatus: HeadTrackingSenderStatus = .idle
+    @Published var headTrackingDisplay = HeadTrackingDisplayState.idle
     @Published var isSettingsPresented = false
 
     private let demoTelemetry = DemoTelemetrySource()
@@ -113,7 +113,7 @@ final class FPVHUDViewModel: ObservableObject {
 
         headTrackingSender.onStatus = { [weak self] status in
             Task { @MainActor in
-                self?.headTrackingSenderStatus = status
+                self?.headTrackingDisplay = HeadTrackingDisplayState(senderStatus: status)
             }
         }
 

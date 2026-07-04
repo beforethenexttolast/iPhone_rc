@@ -4,7 +4,7 @@ struct FPVHUDView: View {
     var telemetry: TelemetryState
     var motion: MotionState
     var settings: AppSettings
-    var headTrackingSenderStatus: HeadTrackingSenderStatus
+    var headTrackingDisplay: HeadTrackingDisplayState
 
     var body: some View {
         GeometryReader { proxy in
@@ -52,7 +52,7 @@ struct FPVHUDView: View {
                         .padding(.horizontal, horizontalInset)
                 }
 
-                if settings.trackingEnabled, let error = headTrackingSenderStatus.lastErrorText {
+                if settings.trackingEnabled, let error = headTrackingDisplay.warningText {
                     WarningBanner(text: "HEAD TX: \(error)", linkState: .degraded)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .padding(.top, landscape ? 124 : 138)
