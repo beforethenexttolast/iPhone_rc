@@ -25,6 +25,9 @@ struct RootView: View {
             .accessibilityLabel("Settings")
         }
         .fpvStatusBarHidden()
+        .onAppear {
+            viewModel.startServicesIfNeeded()
+        }
         .sheet(isPresented: $viewModel.isSettingsPresented) {
             SettingsPanelView(viewModel: viewModel)
                 .presentationDetents([.medium, .large])

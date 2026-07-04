@@ -26,6 +26,7 @@ final class FPVHUDViewModel: ObservableObject {
     private let motionStatusQueue = DispatchQueue(label: "fpvhud.motion.status.timer")
     private let headTrackingSendQueue = DispatchQueue(label: "fpvhud.headtracking.send.timer")
     private var hasCenteredTracking = false
+    private var servicesStarted = false
 
     init(
         motionService: MotionService = MotionServiceFactory.makeDefault(),
@@ -35,11 +36,25 @@ final class FPVHUDViewModel: ObservableObject {
         self.settingsStore = settingsStore
         self.settings = settingsStore.load()
         bindServices()
-        applySettings()
+    }
+
+    func startServicesIfNeeded() {
+        guard !servicesStarted else { return }
+        servicesStarted = true
+        applyRuntimeSettings()
     }
 
     func applySettings() {
         settingsStore.save(settings)
+        guard servicesStarted else {
+            updateMotionState()
+            return
+        }
+
+        applyRuntimeSettings()
+    }
+
+    private func applyRuntimeSettings() {
         headTrackingSender.configure(
             host: settings.windowsHost,
             port: UInt16(clamping: settings.headTrackingPort)
@@ -90,6 +105,7 @@ final class FPVHUDViewModel: ObservableObject {
         motionStatusTimer = nil
         headTrackingSendTimer?.cancel()
         headTrackingSendTimer = nil
+        servicesStarted = false
     }
 
     private func bindServices() {
