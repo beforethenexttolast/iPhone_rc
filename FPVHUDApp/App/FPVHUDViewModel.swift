@@ -20,8 +20,10 @@ final class FPVHUDViewModel: ObservableObject {
     private var centerYawDeg: Double = 0
     private var centerPitchDeg: Double = 0
     private var centerRollDeg: Double = 0
-    private var motionStatusTimer: Timer?
-    private var headTrackingSendTimer: Timer?
+    private var motionStatusTimer: DispatchSourceTimer?
+    private var headTrackingSendTimer: DispatchSourceTimer?
+    private let motionStatusQueue = DispatchQueue(label: "fpvhud.motion.status.timer")
+    private let headTrackingSendQueue = DispatchQueue(label: "fpvhud.headtracking.send.timer")
     private var hasCenteredTracking = false
 
     init(
@@ -61,13 +63,21 @@ final class FPVHUDViewModel: ObservableObject {
         updateMotionState()
     }
 
+    func resetTrackingCalibration() {
+        centerYawDeg = 0
+        centerPitchDeg = 0
+        centerRollDeg = 0
+        hasCenteredTracking = false
+        updateMotionState()
+    }
+
     func stopNetworking() {
         demoTelemetry.stop()
         udpTelemetry.stop()
         headTrackingSender.stop()
-        motionStatusTimer?.invalidate()
+        motionStatusTimer?.cancel()
         motionStatusTimer = nil
-        headTrackingSendTimer?.invalidate()
+        headTrackingSendTimer?.cancel()
         headTrackingSendTimer = nil
     }
 
@@ -129,7 +139,7 @@ final class FPVHUDViewModel: ObservableObject {
     }
 
     private func sendHeadTrackingIfNeeded() {
-        guard settings.trackingEnabled, motion.status == .active else {
+        guard settings.trackingEnabled, HeadTrackingSafety.canSend(status: motion.status) else {
             headTrackingSender.refreshStatus()
             return
         }
@@ -151,35 +161,38 @@ final class FPVHUDViewModel: ObservableObject {
     }
 
     private func startMotionStatusTimer() {
-        motionStatusTimer?.invalidate()
-        motionStatusTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        motionStatusTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: motionStatusQueue)
+        timer.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250), leeway: .milliseconds(30))
+        timer.setEventHandler { [weak self] in
             Task { @MainActor in
                 self?.updateMotionState()
             }
         }
+        timer.resume()
+        motionStatusTimer = timer
     }
 
     private func startHeadTrackingSendTimer() {
-        headTrackingSendTimer?.invalidate()
+        headTrackingSendTimer?.cancel()
         let clampedRate = min(max(settings.headTrackingSendHz, 30), 60)
-        headTrackingSendTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / Double(clampedRate), repeats: true) { [weak self] _ in
+        let intervalMs = max(1, Int((1000.0 / Double(clampedRate)).rounded()))
+        let timer = DispatchSource.makeTimerSource(queue: headTrackingSendQueue)
+        timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs), leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
             Task { @MainActor in
                 self?.sendHeadTrackingIfNeeded()
             }
         }
+        timer.resume()
+        headTrackingSendTimer = timer
     }
 
     private func headTrackingStatus(for timestamp: Date) -> HeadTrackingStatus {
-        let age = Date().timeIntervalSince(timestamp)
-
-        if timestamp == .distantPast || age > 2.0 {
-            return settings.trackingEnabled ? .lost : .off
-        }
-
-        if age > 0.5 {
-            return .stale
-        }
-
-        return settings.trackingEnabled ? .active : .ready
+        HeadTrackingSafety.status(
+            trackingEnabled: settings.trackingEnabled,
+            hasCentered: hasCenteredTracking,
+            sampleTimestamp: timestamp
+        )
     }
 }

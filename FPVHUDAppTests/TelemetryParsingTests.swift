@@ -2,6 +2,62 @@ import XCTest
 @testable import FPVHUDApp
 
 final class TelemetryParsingTests: XCTestCase {
+    func testHeadTrackingSafetyRequiresCenteringBeforeSend() {
+        let now = Date()
+        let status = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: false,
+            sampleTimestamp: now,
+            now: now
+        )
+
+        XCTAssertEqual(status, .readyNotCentered)
+        XCTAssertFalse(HeadTrackingSafety.canSend(status: status))
+    }
+
+    func testHeadTrackingSafetyAllowsSendOnlyWhenActive() {
+        let now = Date()
+        let status = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: true,
+            sampleTimestamp: now,
+            now: now
+        )
+
+        XCTAssertEqual(status, .active)
+        XCTAssertTrue(HeadTrackingSafety.canSend(status: status))
+    }
+
+    func testHeadTrackingSafetyStopsSendWhenDisabledOrStaleOrError() {
+        let now = Date()
+
+        let disabled = HeadTrackingSafety.status(
+            trackingEnabled: false,
+            hasCentered: true,
+            sampleTimestamp: now,
+            now: now
+        )
+        let stale = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: true,
+            sampleTimestamp: now.addingTimeInterval(-0.75),
+            now: now
+        )
+        let error = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: true,
+            sampleTimestamp: now.addingTimeInterval(-2.5),
+            now: now
+        )
+
+        XCTAssertEqual(disabled, .off)
+        XCTAssertEqual(stale, .stale)
+        XCTAssertEqual(error, .error)
+        XCTAssertFalse(HeadTrackingSafety.canSend(status: disabled))
+        XCTAssertFalse(HeadTrackingSafety.canSend(status: stale))
+        XCTAssertFalse(HeadTrackingSafety.canSend(status: error))
+    }
+
     func testHeadTrackingPacketEncodesDebugJSONShape() throws {
         let packet = HeadTrackingPacket(
             seq: 7,

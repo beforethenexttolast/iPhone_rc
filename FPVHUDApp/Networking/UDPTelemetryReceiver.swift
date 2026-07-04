@@ -15,10 +15,23 @@ final class UDPTelemetryReceiver: TelemetrySource {
     private let queue = DispatchQueue(label: "fpvhud.telemetry.udp")
 
     func start(settings: AppSettings) {
-        stop()
         guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: settings.telemetryPort)) else {
             return
         }
+
+        queue.async { [weak self] in
+            self?.startOnQueue(port: port)
+        }
+    }
+
+    func stop() {
+        queue.async { [weak self] in
+            self?.stopOnQueue(emitIdle: true)
+        }
+    }
+
+    private func startOnQueue(port: NWEndpoint.Port) {
+        stopOnQueue(emitIdle: false)
 
         do {
             startedAt = Date()
@@ -49,7 +62,7 @@ final class UDPTelemetryReceiver: TelemetrySource {
         }
     }
 
-    func stop() {
+    private func stopOnQueue(emitIdle: Bool) {
         stalenessTimer?.cancel()
         stalenessTimer = nil
         listener?.cancel()
@@ -58,12 +71,15 @@ final class UDPTelemetryReceiver: TelemetrySource {
         connections.removeAll()
         startedAt = nil
         lastPacketReceivedAt = nil
-        onStatus?(.idle)
+        if emitIdle {
+            onStatus?(.idle)
+        }
     }
 
     private func receive(on connection: NWConnection) {
         connection.receiveMessage { [weak self] data, _, _, error in
             guard let self else { return }
+            guard self.listener != nil else { return }
             guard error == nil else { return }
             if let data {
                 self.parse(data)

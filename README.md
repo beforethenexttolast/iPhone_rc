@@ -216,10 +216,10 @@ The debug panel shows raw yaw/pitch/roll, centered yaw/pitch/roll, and stored ce
 The HUD indicator reports:
 
 - `HEAD TRACK OFF`: no usable motion yet and tracking output disabled.
-- `HEAD TRACK READY`: motion is fresh, centered values are available, but output is disabled.
+- `HEAD TRACK READY - NOT CENTERED`: motion is fresh and tracking is enabled, but center/calibrate has not been performed, so no packets are sent.
 - `HEAD TRACK ACTIVE`: motion is fresh and yaw/pitch/roll intent packets are being sent to Windows.
 - `HEAD TRACK STALE`: the latest motion sample is older than about `0.5s`.
-- `HEAD TRACK LOST`: no motion sample has arrived for about `2s`.
+- `HEAD TRACK ERROR`: no motion sample has arrived for about `2s`.
 
 These packets are still only intent packets to Windows. The iPhone app does not send CRSF and does not directly command the car or gimbal.
 

@@ -313,10 +313,10 @@ private struct RightTrackingCluster: View {
     private var headTrackingColor: Color {
         switch motion.status {
         case .off: return .gray
-        case .ready: return HUDPalette.teal
+        case .readyNotCentered: return HUDPalette.amber
         case .active: return HUDPalette.green
         case .stale: return HUDPalette.amber
-        case .lost: return HUDPalette.red
+        case .error: return HUDPalette.red
         }
     }
 }

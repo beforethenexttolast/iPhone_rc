@@ -84,6 +84,12 @@ struct SettingsPanelView: View {
                         Label("Center / calibrate", systemImage: "scope")
                     }
 
+                    Button(role: .destructive) {
+                        viewModel.resetTrackingCalibration()
+                    } label: {
+                        Label("Reset calibration", systemImage: "xmark.circle")
+                    }
+
                     HStack {
                         Text("State")
                         Spacer()

@@ -32,19 +32,47 @@ struct MotionState: Equatable {
 
 enum HeadTrackingStatus: String, Equatable {
     case off
-    case ready
+    case readyNotCentered
     case active
     case stale
-    case lost
+    case error
 
     var displayName: String {
         switch self {
         case .off: return "HEAD TRACK OFF"
-        case .ready: return "HEAD TRACK READY"
+        case .readyNotCentered: return "HEAD TRACK READY - NOT CENTERED"
         case .active: return "HEAD TRACK ACTIVE"
         case .stale: return "HEAD TRACK STALE"
-        case .lost: return "HEAD TRACK LOST"
+        case .error: return "HEAD TRACK ERROR"
         }
+    }
+}
+
+enum HeadTrackingSafety {
+    static func status(
+        trackingEnabled: Bool,
+        hasCentered: Bool,
+        sampleTimestamp: Date,
+        now: Date = Date(),
+        staleAfter: TimeInterval = 0.5,
+        errorAfter: TimeInterval = 2.0
+    ) -> HeadTrackingStatus {
+        guard trackingEnabled else { return .off }
+
+        let age = now.timeIntervalSince(sampleTimestamp)
+        if sampleTimestamp == .distantPast || age > errorAfter {
+            return .error
+        }
+
+        if age > staleAfter {
+            return .stale
+        }
+
+        return hasCentered ? .active : .readyNotCentered
+    }
+
+    static func canSend(status: HeadTrackingStatus) -> Bool {
+        status == .active
     }
 }
 

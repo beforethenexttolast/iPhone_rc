@@ -13,19 +13,31 @@ final class HeadTrackingSender {
     private let queue = DispatchQueue(label: "fpvhud.headtracking.udp")
 
     func configure(host: String, port: UInt16) {
-        stop()
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
-            lastErrorText = "Invalid head tracking UDP port"
-            emitStatus(isConfigured: false)
+            queue.async { [weak self] in
+                self?.stopOnQueue()
+                self?.lastErrorText = "Invalid head tracking UDP port"
+                self?.emitStatus(isConfigured: false)
+            }
             return
         }
 
-        connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .udp)
+        queue.async { [weak self] in
+            self?.configureOnQueue(host: host, port: nwPort)
+        }
+    }
+
+    private func configureOnQueue(host: String, port: NWEndpoint.Port) {
+        stopOnQueue()
+
+        connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: .udp)
         connection?.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             if case let .failed(error) = state {
-                self.lastErrorText = error.localizedDescription
-                self.emitStatus(isConfigured: false)
+                self.queue.async {
+                    self.lastErrorText = error.localizedDescription
+                    self.emitStatus(isConfigured: false)
+                }
             }
         }
         connection?.start(queue: queue)
@@ -34,6 +46,26 @@ final class HeadTrackingSender {
     }
 
     func send(
+        yawDeg: Double,
+        pitchDeg: Double,
+        rollDeg: Double,
+        trackingEnabled: Bool,
+        centered: Bool,
+        timeoutMs: UInt16
+    ) {
+        queue.async { [weak self] in
+            self?.sendOnQueue(
+                yawDeg: yawDeg,
+                pitchDeg: pitchDeg,
+                rollDeg: rollDeg,
+                trackingEnabled: trackingEnabled,
+                centered: centered,
+                timeoutMs: timeoutMs
+            )
+        }
+    }
+
+    private func sendOnQueue(
         yawDeg: Double,
         pitchDeg: Double,
         rollDeg: Double,
@@ -90,6 +122,12 @@ final class HeadTrackingSender {
     }
 
     func stop() {
+        queue.async { [weak self] in
+            self?.stopOnQueue()
+        }
+    }
+
+    private func stopOnQueue() {
         connection?.cancel()
         connection = nil
         sendTimestamps.removeAll()
