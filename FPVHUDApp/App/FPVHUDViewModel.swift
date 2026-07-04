@@ -175,8 +175,7 @@ final class FPVHUDViewModel: ObservableObject {
 
     private func startHeadTrackingSendTimer() {
         headTrackingSendTimer?.cancel()
-        let clampedRate = min(max(settings.headTrackingSendHz, 30), 60)
-        let intervalMs = max(1, Int((1000.0 / Double(clampedRate)).rounded()))
+        let intervalMs = HeadTrackingTiming.sendIntervalMilliseconds(forRateHz: settings.headTrackingSendHz)
         let timer = DispatchSource.makeTimerSource(queue: headTrackingSendQueue)
         timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs), leeway: .milliseconds(2))
         timer.setEventHandler { [weak self] in

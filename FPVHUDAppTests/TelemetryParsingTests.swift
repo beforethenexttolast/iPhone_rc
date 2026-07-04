@@ -2,6 +2,17 @@ import XCTest
 @testable import FPVHUDApp
 
 final class TelemetryParsingTests: XCTestCase {
+    func testHeadTrackingTimingClampsSendRate() {
+        XCTAssertEqual(HeadTrackingTiming.clampedSendRateHz(10), 30)
+        XCTAssertEqual(HeadTrackingTiming.clampedSendRateHz(45), 45)
+        XCTAssertEqual(HeadTrackingTiming.clampedSendRateHz(90), 60)
+    }
+
+    func testHeadTrackingTimingCalculatesIntervalMilliseconds() {
+        XCTAssertEqual(HeadTrackingTiming.sendIntervalMilliseconds(forRateHz: 30), 33)
+        XCTAssertEqual(HeadTrackingTiming.sendIntervalMilliseconds(forRateHz: 60), 17)
+    }
+
     func testHeadTrackingSafetyRequiresCenteringBeforeSend() {
         let now = Date()
         let status = HeadTrackingSafety.status(
