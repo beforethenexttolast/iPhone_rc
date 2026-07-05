@@ -1,0 +1,51 @@
+name: iOS Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  validate:
+    name: Build And Test
+    runs-on: macos-latest
+    env:
+      FPVHUD_PROJECT: FPVHUDApp.xcodeproj
+      FPVHUD_SCHEME: FPVHUDApp
+      FPVHUD_DESTINATION: platform=iOS Simulator,name=iPhone 16
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode Version
+        run: xcodebuild -version
+
+      - name: Python Syntax Checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for path in sorted(Path("scripts").glob("*.py")):
+              compile(path.read_text(encoding="utf-8"), str(path), "exec")
+              print(f"ok {path}")
+          PY
+
+      - name: Protocol Example And Fixture Validation
+        run: python3 scripts/validate_protocol_examples.py
+
+      - name: Build Simulator Target
+        run: |
+          xcodebuild -project "$FPVHUD_PROJECT" \
+            -scheme "$FPVHUD_SCHEME" \
+            -destination "$FPVHUD_DESTINATION" \
+            build
+
+      - name: Run Unit Tests
+        run: |
+          xcodebuild -project "$FPVHUD_PROJECT" \
+            -scheme "$FPVHUD_SCHEME" \
+            -destination "$FPVHUD_DESTINATION" \
+            test

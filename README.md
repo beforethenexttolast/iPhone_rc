@@ -66,6 +66,22 @@ If `xcodebuild` reports that Command Line Tools are selected, switch to full Xco
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 ```
 
+## Pre-Device Validation
+
+Before committing or testing on a real iPhone, run the local no-hardware check:
+
+```sh
+scripts/dev_check.sh
+```
+
+It runs Python script syntax checks, protocol example/fixture validation, an iOS Simulator build, and the unit test suite. The default simulator destination is `iPhone 17`; override it if your Xcode install has a different simulator:
+
+```sh
+FPVHUD_DESTINATION='platform=iOS Simulator,name=iPhone 16' scripts/dev_check.sh
+```
+
+GitHub Actions also runs the same validation categories on macOS. No real iPhone, OpenIPC camera, Windows repo, or vehicle hardware is required.
+
 ## Real iPhone First Test
 
 The app is prepared as a landscape-only iPhone target for first device testing. `Info.plist` declares Landscape Left and Landscape Right for iPhone, includes local network usage text for UDP telemetry/head-tracking traffic, and includes motion usage text for Core Motion head tracking.
