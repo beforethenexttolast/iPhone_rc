@@ -95,6 +95,8 @@ The first UDP network use may trigger the iOS Local Network permission prompt. A
 
 Demo mode does not require network access. Real telemetry mode expects the Windows ground station to normalize CRSF/ELRS telemetry and forward JSON snapshots to the iPhone telemetry port.
 
+For local bench tests, keep the Mac and iPhone on the same Wi-Fi network. Use the iPhone Wi-Fi IP address for Mac -> iPhone telemetry, and use the Mac Wi-Fi IP address as the app's Windows host for iPhone -> Mac head-tracking packets.
+
 ### Core Motion Test
 
 The simulator uses mock motion. A real iPhone uses Core Motion.
@@ -109,47 +111,42 @@ Head-tracking UDP packets must not send until tracking is enabled and the phone 
 
 ### UDP Telemetry Receiver Test
 
-Disable demo mode, then send a normalized JSON snapshot to the iPhone IP and telemetry port, default `5601`:
+Disable demo mode, then send animated normalized JSON snapshots from the Mac to the iPhone telemetry port, default `5601`:
 
-```python
-import json
-import socket
-import time
-
-IPHONE_IP = "192.168.1.50"
-PORT = 5601
-
-packet = {
-    "timestamp_ms": int(time.time() * 1000),
-    "battery_v": 14.8,
-    "link_quality": 92,
-    "rssi_dbm": -62,
-    "snr_db": 18,
-    "speed_kmh": 12.4,
-    "gear": 3,
-    "drive_mode": "GEARBOX_ERS",
-    "ers_percent": 55,
-    "throttle": 0.43,
-    "brake": 0.0,
-    "steering": -0.15,
-    "camera_yaw_deg": -12.0,
-    "camera_pitch_deg": 5.0,
-    "head_tracking_mode": "OFF",
-    "video_lock": True,
-    "warning": ""
-}
-
-socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(
-    json.dumps(packet).encode("utf-8"),
-    (IPHONE_IP, PORT)
-)
+```sh
+python3 scripts/send_demo_telemetry.py --host <iphone-wifi-ip> --port 5601 --rate 20
 ```
 
-Confirm the HUD shows live values and Debug / Setup shows recent packet age. Stop sending packets and confirm the HUD transitions through stale and lost telemetry states instead of presenting old values as live.
+The HUD should show live battery, LQ, RSSI, SNR, speed, gear, ERS, input bars, video lock, and warnings. Debug / Setup should show recent packet age.
+
+To test stale/lost telemetry behavior, send for a few seconds and then intentionally stop:
+
+```sh
+python3 scripts/send_demo_telemetry.py --host <iphone-wifi-ip> --duration 5 --idle-after-stop 5
+```
+
+Expected behavior: after packets stop, the HUD should show stale telemetry after about `1s`, then `TELEMETRY DATA LOST >3S` after about `3s`, and unsafe stale values should clear to unknown placeholders.
+
+To test malformed JSON handling:
+
+```sh
+python3 scripts/send_demo_telemetry.py --host <iphone-wifi-ip> --malformed-once
+python3 scripts/send_demo_telemetry.py --host <iphone-wifi-ip> --malformed-every 10
+```
 
 ### UDP Head-Tracking Sender Test
 
-Run the Python UDP receiver from the `Head Tracking UDP Intent` section on the Windows ground-station machine or another computer on the same LAN. Set the app's Windows host and head-tracking port to that machine, enable tracking, center/calibrate, then confirm JSON packets arrive.
+Run the local receiver on the Mac:
+
+```sh
+python3 scripts/receive_head_tracking.py --port 5602
+```
+
+Set the app's Windows host to the Mac Wi-Fi IP address and set the head-tracking port to `5602`. Enable tracking, center/calibrate, then confirm JSON packets arrive.
+
+Expected packet rate is the configured head-tracking send rate, normally `30...60/s`. The receiver prints packet rate once per second and warns if packets stop for more than `300 ms`. Packets should stop when tracking is disabled or calibration is reset.
+
+macOS may ask whether Python can accept incoming network connections. Allow it for this test. If packets do not arrive, check System Settings -> Network -> Firewall or System Settings -> Privacy & Security -> Firewall Options.
 
 Safety reminders for first bench tests:
 
@@ -283,33 +280,13 @@ The settings/debug panel shows:
 
 ### Python UDP Receiver
 
-For a simple local test, run this on the Windows ground-station machine and set the iPhone `Windows host IP` to that machine's LAN IP:
+For a simple local test, run the checked-in receiver on the Windows ground-station machine, Mac, or another computer on the same LAN. Set the iPhone `Windows host IP` to that machine's LAN IP:
 
-```python
-import json
-import socket
-import time
-
-PORT = 5602
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(("0.0.0.0", PORT))
-print(f"listening on UDP {PORT}")
-
-while True:
-    data, addr = sock.recvfrom(2048)
-    received_ms = int(time.time() * 1000)
-    try:
-        packet = json.loads(data.decode("utf-8"))
-    except json.JSONDecodeError as exc:
-        print(f"{addr} bad json: {exc}")
-        continue
-
-    age_ms = received_ms - int(packet.get("timestamp_ms", received_ms))
-    timeout_ms = int(packet.get("timeout_ms", 250))
-    stale = age_ms > timeout_ms
-    print(addr, packet, "age_ms=", age_ms, "stale=", stale)
+```sh
+python3 scripts/receive_head_tracking.py --port 5602
 ```
+
+The script prints sequence, packet age, yaw, pitch, roll, enabled/centered state, packet rate, and a warning if packets stop for more than `300 ms`. It does not control hardware.
 
 ## Testing Head Tracking On iPhone
 
