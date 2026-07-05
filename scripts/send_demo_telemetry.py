@@ -14,27 +14,34 @@ from typing import Any
 DEFAULT_HOST = "192.168.1.50"
 DEFAULT_PORT = 5601
 DEFAULT_RATE_HZ = 20.0
+DEFAULT_DROP_IDLE_SECONDS = 5.0
 
 
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def make_packet(start_time: float, sequence: int) -> dict[str, Any]:
+def make_packet(start_time: float, sequence: int, profile: str) -> dict[str, Any]:
     elapsed = time.monotonic() - start_time
+    noisy = profile == "noisy"
+    stale_profile = profile == "stale"
     wave = math.sin(elapsed * 0.9)
     fast_wave = math.sin(elapsed * 2.2)
-    steering = math.sin(elapsed * 1.4) * 0.75
+    steering_amplitude = 0.95 if noisy else 0.75
+    steering = math.sin(elapsed * (1.9 if noisy else 1.4)) * steering_amplitude
     throttle = clamp((math.sin(elapsed * 0.7) + 1.0) * 0.5, 0.0, 1.0)
     brake = clamp((math.sin(elapsed * 0.45 + math.pi) - 0.55) * 1.8, 0.0, 1.0)
-    speed = max(0.0, 8.0 + throttle * 42.0 - brake * 18.0 + fast_wave * 2.5)
+    speed_noise = fast_wave * (6.0 if noisy else 2.5)
+    speed = max(0.0, 8.0 + throttle * 42.0 - brake * 18.0 + speed_noise)
     gear = max(1, min(5, int(speed // 12.0) + 1))
     ers = int(clamp(55.0 + math.sin(elapsed * 0.35) * 35.0, 0.0, 100.0))
-    lq = int(clamp(88.0 + math.sin(elapsed * 0.5) * 10.0, 45.0, 100.0))
-    rssi = int(round(-64.0 + math.sin(elapsed * 0.65) * 9.0))
-    snr = int(round(17.0 + math.sin(elapsed * 0.8) * 6.0))
+    lq_center = 72.0 if noisy else 88.0
+    lq_swing = 28.0 if noisy else 10.0
+    lq = int(clamp(lq_center + math.sin(elapsed * 0.9) * lq_swing, 25.0, 100.0))
+    rssi = int(round((-72.0 if noisy else -64.0) + math.sin(elapsed * 0.65) * (16.0 if noisy else 9.0)))
+    snr = int(round((11.0 if noisy else 17.0) + math.sin(elapsed * 1.1) * (11.0 if noisy else 6.0)))
     battery = max(11.5, 16.2 - elapsed * 0.003 + wave * 0.05)
-    video_lock = int(elapsed) % 23 != 0
+    video_lock = int(elapsed * (2 if noisy else 1)) % (7 if noisy else 23) != 0
 
     warning = ""
     if not video_lock:
@@ -43,8 +50,10 @@ def make_packet(start_time: float, sequence: int) -> dict[str, Any]:
         warning = "LINK QUALITY LOW"
     elif battery < 12.0:
         warning = "BATTERY LOW"
+    elif stale_profile:
+        warning = "SIMULATED STALE SOURCE"
 
-    return {
+    packet: dict[str, Any] = {
         "timestamp_ms": int(time.time() * 1000),
         "battery_v": round(battery, 2),
         "link_quality": lq,
@@ -65,6 +74,11 @@ def make_packet(start_time: float, sequence: int) -> dict[str, Any]:
         "test_sequence": sequence,
     }
 
+    if stale_profile:
+        packet["stale_data_warnings"] = ["speed", "flightMode"]
+
+    return packet
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -77,13 +91,30 @@ def parse_args() -> argparse.Namespace:
         "--duration",
         type=float,
         default=0.0,
-        help="Seconds to send before stopping; 0 means run until Ctrl-C.",
+        help="Seconds to run; without --drop-after this is also the send duration. 0 means run until Ctrl-C.",
+    )
+    parser.add_argument(
+        "--drop-after",
+        type=float,
+        default=None,
+        help="Stop sending after N seconds but keep the process alive to test stale/lost HUD behavior.",
     )
     parser.add_argument(
         "--idle-after-stop",
         type=float,
         default=0.0,
         help="After --duration expires, stay alive without sending for this many seconds.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("normal", "stale", "noisy"),
+        default="normal",
+        help="Telemetry profile to send.",
+    )
+    parser.add_argument(
+        "--malformed",
+        action="store_true",
+        help="Send one malformed UDP payload and exit.",
     )
     parser.add_argument(
         "--malformed-once",
@@ -118,6 +149,8 @@ def main() -> int:
         raise SystemExit("--rate must be greater than 0")
     if args.duration < 0 or args.idle_after_stop < 0:
         raise SystemExit("--duration and --idle-after-stop must be non-negative")
+    if args.drop_after is not None and args.drop_after < 0:
+        raise SystemExit("--drop-after must be non-negative")
 
     interval = 1.0 / args.rate
     destination = (args.host.strip(), args.port)
@@ -125,22 +158,46 @@ def main() -> int:
     start_time = time.monotonic()
     next_send = start_time
     sequence = 0
+    total_duration = args.duration if args.duration > 0 else None
+    send_until = args.drop_after if args.drop_after is not None else total_duration
+
+    if args.drop_after is not None and total_duration is None:
+        idle = args.idle_after_stop if args.idle_after_stop > 0 else DEFAULT_DROP_IDLE_SECONDS
+        total_duration = args.drop_after + idle
+
+    if args.drop_after is not None and total_duration is not None and total_duration < args.drop_after:
+        raise SystemExit("--duration must be greater than or equal to --drop-after")
 
     print(
-        f"sending telemetry to {destination[0]}:{destination[1]} at {args.rate:g} Hz "
-        f"({'until Ctrl-C' if args.duration == 0 else f'for {args.duration:g}s'})"
+        f"sending telemetry to {destination[0]}:{destination[1]} at {args.rate:g} Hz, "
+        f"profile={args.profile} "
+        f"({'until Ctrl-C' if total_duration is None else f'for {total_duration:g}s'})"
     )
+
+    if args.malformed:
+        sock.sendto(malformed_payload(sequence), destination)
+        print("sent one malformed payload")
+        return 0
 
     if args.malformed_once:
         sock.sendto(malformed_payload(sequence), destination)
         print("sent one malformed payload")
 
+    drop_announced = False
+
     try:
         while True:
             now = time.monotonic()
             elapsed = now - start_time
-            if args.duration and elapsed >= args.duration:
+            if total_duration is not None and elapsed >= total_duration:
                 break
+
+            if send_until is not None and elapsed >= send_until:
+                if not drop_announced:
+                    print(f"stopped sending at {elapsed:.2f}s; process remains alive for stale/lost testing")
+                    drop_announced = True
+                time.sleep(0.05)
+                continue
 
             sleep_for = next_send - now
             if sleep_for > 0:
@@ -154,9 +211,10 @@ def main() -> int:
             if should_malformed:
                 payload = malformed_payload(sequence)
             else:
-                payload = json.dumps(make_packet(start_time, sequence), separators=(",", ":")).encode(
-                    "utf-8"
-                )
+                payload = json.dumps(
+                    make_packet(start_time, sequence, args.profile),
+                    separators=(",", ":"),
+                ).encode("utf-8")
 
             sock.sendto(payload, destination)
             if sequence == 1 or sequence % max(1, int(args.rate)) == 0:
@@ -168,8 +226,8 @@ def main() -> int:
         print("\nstopped by user")
         return 0
 
-    print(f"stopped sending after {sequence} packets")
-    if args.idle_after_stop > 0:
+    print(f"finished after {sequence} packets")
+    if args.drop_after is None and args.idle_after_stop > 0:
         print(f"idling for {args.idle_after_stop:g}s so the app can show stale/lost telemetry")
         time.sleep(args.idle_after_stop)
     return 0

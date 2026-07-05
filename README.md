@@ -67,6 +67,8 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 The app is prepared as a landscape-only iPhone target for first device testing. `Info.plist` declares Landscape Left and Landscape Right for iPhone, includes local network usage text for UDP telemetry/head-tracking traffic, and includes motion usage text for Core Motion head tracking.
 
+No real iPhone is required for the local simulator harness. See `docs/SIMULATOR_TESTING.md` for a Mac-to-Simulator UDP workflow covering telemetry receive, stale/lost behavior, malformed telemetry, settings validation, and mock-motion head-tracking packet gating.
+
 ### Install From Xcode
 
 1. Connect the iPhone over USB, or pair it for wireless development in Xcode.

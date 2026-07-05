@@ -11,7 +11,7 @@ from typing import Any
 
 
 DEFAULT_PORT = 5602
-STALE_WARNING_SECONDS = 0.300
+DEFAULT_TIMEOUT_MS = 300
 
 
 def parse_args() -> argparse.Namespace:
@@ -20,6 +20,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", default="0.0.0.0", help="Bind address")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="UDP port to listen on")
+    parser.add_argument(
+        "--timeout-ms",
+        type=int,
+        default=DEFAULT_TIMEOUT_MS,
+        help="Warn if no packets arrive for this many milliseconds.",
+    )
+    parser.add_argument(
+        "--print-rate",
+        dest="print_rate",
+        action="store_true",
+        default=True,
+        help="Print packet rate once per second.",
+    )
+    parser.add_argument(
+        "--no-print-rate",
+        dest="print_rate",
+        action="store_false",
+        help="Disable once-per-second packet-rate lines.",
+    )
     return parser.parse_args()
 
 
@@ -39,6 +58,8 @@ def main() -> int:
     args = parse_args()
     if not 1 <= args.port <= 65535:
         raise SystemExit("--port must be in 1...65535")
+    if args.timeout_ms <= 0:
+        raise SystemExit("--timeout-ms must be greater than 0")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((args.host, args.port))
@@ -49,6 +70,7 @@ def main() -> int:
     last_packet_time: float | None = None
     last_rate_time = time.monotonic()
     warned_stopped = False
+    timeout_seconds = args.timeout_ms / 1000.0
 
     print(f"listening for head-tracking UDP on {args.host}:{args.port}")
     print("no hardware is controlled by this script")
@@ -62,11 +84,11 @@ def main() -> int:
                 if (
                     last_packet_time is not None
                     and not warned_stopped
-                    and now - last_packet_time > STALE_WARNING_SECONDS
+                    and now - last_packet_time > timeout_seconds
                 ):
-                    print(f"WARNING: no packets for >{int(STALE_WARNING_SECONDS * 1000)} ms")
+                    print(f"WARNING: no packets for >{args.timeout_ms} ms")
                     warned_stopped = True
-                if now - last_rate_time >= 1.0:
+                if args.print_rate and now - last_rate_time >= 1.0:
                     print(f"rate={window_count}/s")
                     window_count = 0
                     last_rate_time = now
@@ -106,7 +128,7 @@ def main() -> int:
             )
 
             now = time.monotonic()
-            if now - last_rate_time >= 1.0:
+            if args.print_rate and now - last_rate_time >= 1.0:
                 print(f"rate={window_count}/s")
                 window_count = 0
                 last_rate_time = now
