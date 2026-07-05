@@ -69,6 +69,12 @@ struct DebugHUDView: View {
                                 )
                             }
 
+                            if viewModel.mockMotionControls.isAvailable {
+                                DebugPanel(title: "SIMULATOR / MOCK") {
+                                    MockMotionControlPanel(viewModel: viewModel)
+                                }
+                            }
+
                             DebugPanel(title: "Telemetry") {
                                 DebugRow("Source", viewModel.telemetryDisplay.sourceText)
                                 DebugRow("Link", viewModel.telemetryDisplay.linkText)
@@ -282,6 +288,143 @@ private struct DebugMotionActions: View {
             Label("Reset", systemImage: "xmark.circle")
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+        }
+    }
+}
+
+private struct MockMotionControlPanel: View {
+    @ObservedObject var viewModel: FPVHUDViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Mock motion drives the same MotionState pipeline as Core Motion.")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(HUDPalette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            MockMotionSlider(
+                title: "Yaw",
+                value: viewModel.mockMotionControls.yawDeg,
+                range: -180...180,
+                onChange: { viewModel.setMockMotion(yawDeg: $0) }
+            )
+
+            MockMotionSlider(
+                title: "Pitch",
+                value: viewModel.mockMotionControls.pitchDeg,
+                range: -90...90,
+                onChange: { viewModel.setMockMotion(pitchDeg: $0) }
+            )
+
+            MockMotionSlider(
+                title: "Roll",
+                value: viewModel.mockMotionControls.rollDeg,
+                range: -90...90,
+                onChange: { viewModel.setMockMotion(rollDeg: $0) }
+            )
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    trackingButton
+                    centerButton
+                    resetMotionButton
+                    resetCalibrationButton
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    trackingButton
+                    HStack(spacing: 8) {
+                        centerButton
+                        resetMotionButton
+                        resetCalibrationButton
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    trackingButton
+                    centerButton
+                    resetMotionButton
+                    resetCalibrationButton
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private var trackingButton: some View {
+        Button {
+            viewModel.setTrackingEnabled(!viewModel.settings.trackingEnabled)
+        } label: {
+            Label(
+                viewModel.settings.trackingEnabled ? "Tracking off" : "Tracking on",
+                systemImage: viewModel.settings.trackingEnabled ? "pause.circle" : "play.circle"
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+        }
+        .keyboardShortcut("t", modifiers: [])
+    }
+
+    private var centerButton: some View {
+        Button {
+            viewModel.centerTracking()
+        } label: {
+            Label("Center", systemImage: "scope")
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .keyboardShortcut("c", modifiers: [])
+    }
+
+    private var resetMotionButton: some View {
+        Button {
+            viewModel.resetMockMotion()
+        } label: {
+            Label("Zero", systemImage: "arrow.counterclockwise")
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .keyboardShortcut("z", modifiers: [])
+    }
+
+    private var resetCalibrationButton: some View {
+        Button(role: .destructive) {
+            viewModel.resetTrackingCalibration()
+        } label: {
+            Label("Reset cal", systemImage: "xmark.circle")
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+    }
+}
+
+private struct MockMotionSlider: View {
+    var title: String
+    var value: Double
+    var range: ClosedRange<Double>
+    var onChange: (Double) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .hudLabel()
+                Spacer(minLength: 8)
+                Text(HUDFormatters.signedDegrees(value))
+                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+
+            Slider(
+                value: Binding(
+                    get: { value },
+                    set: onChange
+                ),
+                in: range
+            )
+            .tint(HUDPalette.tealBright)
         }
     }
 }

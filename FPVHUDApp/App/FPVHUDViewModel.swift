@@ -10,6 +10,7 @@ final class FPVHUDViewModel: ObservableObject {
     @Published var telemetryStatus: TelemetryReceiverStatus = .idle
     @Published var headTrackingDisplay = HeadTrackingDisplayState.idle
     @Published var isSettingsPresented = false
+    @Published var mockMotionControls = MockMotionControlState.unavailable
 
     private let demoTelemetry = DemoTelemetrySource()
     private let udpTelemetry = UDPTelemetryReceiver()
@@ -42,6 +43,7 @@ final class FPVHUDViewModel: ObservableObject {
         self.settings = loadedValidation.sanitizedSettings ?? .defaults
         self.settingsValidation = AppSettingsValidator.validate(self.settings)
         bindServices()
+        bindMockMotionControls()
         refreshTelemetryDisplay()
     }
 
@@ -126,6 +128,27 @@ final class FPVHUDViewModel: ObservableObject {
         headTrackingSender.stop()
     }
 
+    func setTrackingEnabled(_ isEnabled: Bool) {
+        var updatedSettings = settings
+        updatedSettings.trackingEnabled = isEnabled
+        applySettings(updatedSettings)
+    }
+
+    func setMockMotion(yawDeg: Double? = nil, pitchDeg: Double? = nil, rollDeg: Double? = nil) {
+        guard let controllable = motionService as? MockMotionControllable else { return }
+        let current = controllable.controlState
+        controllable.setMockMotion(
+            yawDeg: yawDeg ?? current.yawDeg,
+            pitchDeg: pitchDeg ?? current.pitchDeg,
+            rollDeg: rollDeg ?? current.rollDeg
+        )
+    }
+
+    func resetMockMotion() {
+        guard let controllable = motionService as? MockMotionControllable else { return }
+        controllable.resetMockMotion()
+    }
+
     func stopNetworking() {
         demoTelemetry.stop()
         udpTelemetry.stop()
@@ -171,6 +194,20 @@ final class FPVHUDViewModel: ObservableObject {
                 self?.rawPitchDeg = sample.pitchDeg
                 self?.rawRollDeg = sample.rollDeg
                 self?.updateMotionState(sampleTimestamp: sample.timestamp)
+            }
+        }
+    }
+
+    private func bindMockMotionControls() {
+        guard var controllable = motionService as? MockMotionControllable else {
+            mockMotionControls = .unavailable
+            return
+        }
+
+        mockMotionControls = controllable.controlState
+        controllable.onControlStateChanged = { [weak self] state in
+            Task { @MainActor in
+                self?.mockMotionControls = state
             }
         }
     }

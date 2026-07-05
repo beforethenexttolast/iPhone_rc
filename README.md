@@ -290,6 +290,8 @@ python3 scripts/receive_head_tracking.py --port 5602
 
 The script prints sequence, packet age, yaw, pitch, roll, enabled/centered state, packet rate, and a warning if packets stop for more than `300 ms`. It does not control hardware.
 
+In Simulator, Debug / Setup includes a `SIMULATOR / MOCK` motion panel with yaw, pitch, and roll sliders. Use it with `receive_head_tracking.py` to verify the safety flow: tracking off sends nothing, tracking on but not centered sends nothing, and tracking on plus Center sends camera-look intent packets.
+
 ## Testing Head Tracking On iPhone
 
 The simulator uses `MockMotionService`; a real iPhone uses `CoreMotionService`.

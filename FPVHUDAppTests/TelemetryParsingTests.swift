@@ -152,6 +152,34 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(HeadTrackingStatus.error.driveDisplayName, "HEAD STALE")
     }
 
+    func testMockMotionServiceControlsClampAndReset() {
+        let service = MockMotionService()
+        service.setMockMotion(yawDeg: 220, pitchDeg: 120, rollDeg: -120)
+
+        XCTAssertTrue(service.controlState.isAvailable)
+        XCTAssertEqual(service.controlState.yawDeg, -140, accuracy: 0.001)
+        XCTAssertEqual(service.controlState.pitchDeg, 90, accuracy: 0.001)
+        XCTAssertEqual(service.controlState.rollDeg, -90, accuracy: 0.001)
+
+        service.resetMockMotion()
+
+        XCTAssertEqual(service.controlState.yawDeg, 0, accuracy: 0.001)
+        XCTAssertEqual(service.controlState.pitchDeg, 0, accuracy: 0.001)
+        XCTAssertEqual(service.controlState.rollDeg, 0, accuracy: 0.001)
+    }
+
+    func testMockMotionServiceEmitsThroughRawMotionPipeline() {
+        let service = MockMotionService()
+        var sample: RawMotionSample?
+        service.onMotion = { sample = $0 }
+
+        service.setMockMotion(yawDeg: 12.5, pitchDeg: -4.5, rollDeg: 2.25)
+
+        XCTAssertEqual(sample?.yawDeg, 12.5)
+        XCTAssertEqual(sample?.pitchDeg, -4.5)
+        XCTAssertEqual(sample?.rollDeg, 2.25)
+    }
+
     func testTelemetryFreshnessThresholds() {
         XCTAssertEqual(TelemetryFreshness.evaluate(age: 0.25), .live)
         XCTAssertEqual(TelemetryFreshness.evaluate(age: 1.01), .staleWarning)

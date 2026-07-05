@@ -149,27 +149,32 @@ Expected result: receiver prints no head-tracking packets.
 
 Now enable tracking but do not center:
 
-1. Open Settings.
-2. Turn `Head tracking input to Windows` on.
-3. Apply settings.
-4. Do not tap Center/Calibrate yet.
+1. In Debug / Setup, find the `SIMULATOR / MOCK` panel.
+2. Tap `Tracking on`, or press `t` if keyboard focus is available.
+3. Move the Yaw, Pitch, and Roll sliders.
+4. Do not tap Center yet.
 
 Expected result:
 
 - Drive mode should show `HEAD NOT CENTERED`.
 - Receiver still prints no head-tracking packets.
+- The Motion panel raw yaw/pitch/roll should follow the simulator sliders.
 
 Now center/calibrate:
 
-1. In Debug / Setup, tap Center/Calibrate.
+1. In Debug / Setup, tap `Center` in the `SIMULATOR / MOCK` panel, or press `c` if keyboard focus is available.
+2. Move the Yaw, Pitch, and Roll sliders again.
 2. Watch the receiver output.
 
 Expected result:
 
 - Receiver prints JSON packets with `tracking_enabled=true` and `centered=true`.
 - Packet rate should be close to the configured head send rate, normally `30...60/s`.
-- Disable tracking or tap Reset calibration; packets should stop.
+- Tap `Tracking off` or `Reset cal`; packets should stop.
+- Tap `Zero`, or press `z`, to reset mock yaw/pitch/roll to `0 deg`.
 - The receiver warns if packets stop for more than `300 ms`.
+
+The `SIMULATOR / MOCK` panel is only present when the app is using `MockMotionService`. A real iPhone uses `CoreMotionService` and does not show these manual sliders.
 
 ## Script Reference
 
