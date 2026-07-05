@@ -596,16 +596,15 @@ private struct HeadTrackingStatusChip: View {
                 .shadow(color: tint.opacity(0.5), radius: 4)
 
             Text(motion.status.driveDisplayName)
-                .font(.system(size: 10, weight: .black, design: .monospaced))
-                .tracking(0.9)
+                .font(.system(size: 9.5, weight: .black, design: .monospaced))
+                .tracking(0.35)
                 .lineLimit(1)
-                .minimumScaleFactor(0.86)
+                .minimumScaleFactor(0.9)
                 .foregroundStyle(tint)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 11)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
         .background(
             Capsule()
                 .fill(.black.opacity(0.26))

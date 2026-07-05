@@ -57,7 +57,7 @@ struct AppSettingsValidationResult: Equatable {
 
 enum AppSettingsValidator {
     static let portRange = 1...65535
-    static let motionRateRange = 1...120
+    static let motionRateRange = 1...60
     static let sendRateRange = 1...60
     static let timeoutMsRange = 100...5000
 
@@ -98,7 +98,7 @@ enum AppSettingsValidator {
             issues.append(
                 AppSettingsValidationIssue(
                     field: .motionUpdateHz,
-                    message: "Motion rate must be from 1 to 120 Hz."
+                    message: "Motion rate must be from 1 to 60 Hz."
                 )
             )
         }
@@ -143,6 +143,10 @@ enum AppSettingsValidator {
 
     static func parseSendRateHz(_ text: String) -> Int? {
         parseInteger(text, in: sendRateRange)
+    }
+
+    static func parseMotionRateHz(_ text: String) -> Int? {
+        parseInteger(text, in: motionRateRange)
     }
 
     static func parseTimeoutMs(_ text: String) -> Int? {

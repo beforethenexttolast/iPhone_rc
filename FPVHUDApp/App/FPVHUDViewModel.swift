@@ -265,6 +265,7 @@ final class FPVHUDViewModel: ObservableObject {
         timer.setEventHandler { [weak self] in
             Task { @MainActor in
                 self?.updateMotionState()
+                self?.refreshTelemetryDisplay()
             }
         }
         timer.resume()

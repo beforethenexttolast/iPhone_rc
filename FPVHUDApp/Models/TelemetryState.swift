@@ -240,6 +240,10 @@ struct TelemetryDisplayState: Equatable {
             return .live
         }
 
+        if let lastPacketReceivedAt = receiverStatus.lastPacketReceivedAt {
+            return TelemetryFreshness.evaluate(age: max(0, now.timeIntervalSince(lastPacketReceivedAt)))
+        }
+
         if let lastPacketAge = receiverStatus.lastPacketAge {
             return TelemetryFreshness.evaluate(age: lastPacketAge)
         }

@@ -40,7 +40,7 @@ struct SettingsPanelView: View {
                     Stepper(
                         "Motion rate: \(draftSettings.motionUpdateHz) Hz",
                         value: $draftSettings.motionUpdateHz,
-                        in: 15...120,
+                        in: 15...60,
                         step: 5
                     )
                     SettingsValidationMessages(messages: validation.messages(for: .motionUpdateHz))

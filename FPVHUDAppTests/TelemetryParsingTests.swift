@@ -413,6 +413,36 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(display.warningText, "TELEMETRY DATA LOST >3S")
     }
 
+    func testTelemetryDisplayAgesFromLastPacketTimestamp() {
+        let receivedAt = Date()
+        let now = receivedAt.addingTimeInterval(3.2)
+        let state = makeLiveTelemetry(timestamp: receivedAt)
+        let status = TelemetryReceiverStatus(
+            isListening: true,
+            lastPacketReceivedAt: receivedAt,
+            lastPacketAge: 0.1,
+            malformedPacketCount: 0,
+            warningText: nil
+        )
+
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: state,
+            receiverStatus: status,
+            settings: realTelemetrySettings(),
+            now: now
+        )
+
+        XCTAssertEqual(display.freshness, .dataLost)
+        XCTAssertFalse(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "--.- V")
+        XCTAssertEqual(display.linkQualityText, "--")
+        XCTAssertEqual(display.rssiText, "--")
+        XCTAssertEqual(display.snrText, "--")
+        XCTAssertEqual(display.speedValueText, "--")
+        XCTAssertEqual(display.gearText, "--")
+        XCTAssertEqual(display.ersText, "--")
+    }
+
     func testTelemetryDisplayClearsDemoValuesWhenDemoIsOff() {
         let display = TelemetryDisplayState.make(
             rawTelemetry: .demo,
@@ -467,6 +497,10 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertNil(AppSettingsValidator.parseSendRateHz("0"))
         XCTAssertNil(AppSettingsValidator.parseSendRateHz("61"))
 
+        XCTAssertEqual(AppSettingsValidator.parseMotionRateHz("60"), 60)
+        XCTAssertNil(AppSettingsValidator.parseMotionRateHz("0"))
+        XCTAssertNil(AppSettingsValidator.parseMotionRateHz("61"))
+
         XCTAssertEqual(AppSettingsValidator.parseTimeoutMs("250"), 250)
         XCTAssertNil(AppSettingsValidator.parseTimeoutMs("99"))
         XCTAssertNil(AppSettingsValidator.parseTimeoutMs("5001"))
@@ -477,6 +511,7 @@ final class TelemetryParsingTests: XCTestCase {
         invalid.windowsHost = " "
         invalid.telemetryPort = 0
         invalid.headTrackingPort = 70000
+        invalid.motionUpdateHz = 90
         invalid.headTrackingSendHz = 80
         invalid.headTrackingTimeoutMs = 50
 
@@ -487,6 +522,7 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertFalse(invalidResult.messages(for: .windowsHost).isEmpty)
         XCTAssertFalse(invalidResult.messages(for: .telemetryPort).isEmpty)
         XCTAssertFalse(invalidResult.messages(for: .headTrackingPort).isEmpty)
+        XCTAssertFalse(invalidResult.messages(for: .motionUpdateHz).isEmpty)
         XCTAssertFalse(invalidResult.messages(for: .headTrackingSendHz).isEmpty)
         XCTAssertFalse(invalidResult.messages(for: .headTrackingTimeoutMs).isEmpty)
 
