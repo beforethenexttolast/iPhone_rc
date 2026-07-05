@@ -114,9 +114,14 @@ struct SettingsPanelView: View {
 
                     SettingsValueRow(title: "Last send", value: viewModel.headTrackingDisplay.lastSendText)
 
-                    if let error = viewModel.headTrackingDisplay.warningText {
+                    if let error = viewModel.headTrackingDisplay.debugErrorText {
                         Text(error)
                             .foregroundStyle(.orange)
+                    }
+
+                    if let suggestion = viewModel.headTrackingDisplay.debugSuggestionText {
+                        Text(suggestion)
+                            .foregroundStyle(.secondary)
                     }
 
                     SettingsValueRow(title: "Raw yaw", value: HUDFormatters.signedDegrees(viewModel.motion.rawYawDeg))

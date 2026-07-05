@@ -98,8 +98,11 @@ struct DebugHUDView: View {
                                 DebugRow("Tracking", viewModel.settings.trackingEnabled ? "Enabled" : "Disabled")
                                 DebugRow("Send rate", "\(viewModel.settings.headTrackingSendHz) Hz")
                                 DebugRow("Timeout", "\(viewModel.settings.headTrackingTimeoutMs) ms")
-                                if let warning = viewModel.headTrackingDisplay.warningText {
+                                if let warning = viewModel.headTrackingDisplay.debugErrorText {
                                     DebugWarning(text: warning)
+                                }
+                                if let suggestion = viewModel.headTrackingDisplay.debugSuggestionText {
+                                    DebugWarning(text: suggestion)
                                 }
                             }
 
@@ -517,10 +520,10 @@ private struct DriveHUDView: View {
             }
 
             VStack(alignment: .trailing, spacing: 8) {
-                HeadTrackingStatusChip(motion: motion)
-                if settings.trackingEnabled, let error = headTrackingDisplay.warningText {
-                    CompactWarningChip(text: "HEAD TX \(error)", tint: HUDPalette.amber)
-                }
+                HeadTrackingStatusChip(
+                    text: headTrackingDisplay.driveStatusText(motionStatus: motion.status),
+                    status: headTrackingDisplay.hasDriveError ? .error : motion.status
+                )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .padding(.top, max(safeArea.top + 62, 72))
@@ -787,7 +790,8 @@ private struct ControlWidget: View {
 }
 
 private struct HeadTrackingStatusChip: View {
-    var motion: MotionState
+    var text: String
+    var status: HeadTrackingStatus
 
     var body: some View {
         HStack(alignment: .center, spacing: 7) {
@@ -796,13 +800,13 @@ private struct HeadTrackingStatusChip: View {
                 .frame(width: 6, height: 6)
                 .shadow(color: tint.opacity(0.5), radius: 4)
 
-            Text(motion.status.driveDisplayName)
+            Text(text)
                 .font(.system(size: 9.5, weight: .black, design: .monospaced))
                 .tracking(0.35)
                 .lineLimit(1)
-                .minimumScaleFactor(0.9)
+                .minimumScaleFactor(0.72)
+                .truncationMode(.tail)
                 .foregroundStyle(tint)
-                .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -814,12 +818,12 @@ private struct HeadTrackingStatusChip: View {
             Capsule()
                 .stroke(tint.opacity(0.5), lineWidth: 1)
         )
-        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: 210, alignment: .trailing)
         .shadow(color: .black.opacity(0.55), radius: 10)
     }
 
     private var tint: Color {
-        switch motion.status {
+        switch status {
         case .off: return .gray
         case .readyNotCentered: return HUDPalette.amber
         case .active: return HUDPalette.green
@@ -869,12 +873,14 @@ private struct CompactWarningChip: View {
             .tracking(1)
             .lineLimit(1)
             .minimumScaleFactor(0.65)
+            .truncationMode(.tail)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .background(.black.opacity(0.34))
             .foregroundStyle(tint)
             .overlay(Capsule().stroke(tint.opacity(0.62), lineWidth: 1))
             .clipShape(Capsule())
+            .frame(maxWidth: 220, alignment: .trailing)
     }
 }
 

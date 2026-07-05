@@ -65,6 +65,13 @@ struct HeadTrackingDisplayState: Equatable {
     var packetsSentText: String
     var lastSendText: String
     var warningText: String?
+    var driveErrorText: String?
+    var debugErrorText: String?
+    var debugSuggestionText: String?
+
+    var hasDriveError: Bool {
+        driveErrorText != nil
+    }
 
     init(
         isUDPConfigured: Bool,
@@ -72,7 +79,10 @@ struct HeadTrackingDisplayState: Equatable {
         packetRateText: String,
         packetsSentText: String,
         lastSendText: String,
-        warningText: String?
+        warningText: String?,
+        driveErrorText: String?,
+        debugErrorText: String?,
+        debugSuggestionText: String?
     ) {
         self.isUDPConfigured = isUDPConfigured
         self.udpConfiguredText = udpConfiguredText
@@ -80,6 +90,9 @@ struct HeadTrackingDisplayState: Equatable {
         self.packetsSentText = packetsSentText
         self.lastSendText = lastSendText
         self.warningText = warningText
+        self.driveErrorText = driveErrorText
+        self.debugErrorText = debugErrorText
+        self.debugSuggestionText = debugSuggestionText
     }
 
     static let idle = HeadTrackingDisplayState(
@@ -88,7 +101,10 @@ struct HeadTrackingDisplayState: Equatable {
         packetRateText: "0 Hz",
         packetsSentText: "0",
         lastSendText: "Never",
-        warningText: nil
+        warningText: nil,
+        driveErrorText: nil,
+        debugErrorText: nil,
+        debugSuggestionText: nil
     )
 
     init(senderStatus: HeadTrackingSenderStatus, now: Date = Date()) {
@@ -97,11 +113,61 @@ struct HeadTrackingDisplayState: Equatable {
         packetRateText = String(format: "%.0f Hz", senderStatus.packetRateHz)
         packetsSentText = "\(senderStatus.packetsSent)"
         warningText = senderStatus.lastErrorText
+        debugErrorText = senderStatus.lastErrorText
+        driveErrorText = HeadTrackingErrorDisplay.driveLabel(for: senderStatus.lastErrorText)
+        debugSuggestionText = HeadTrackingErrorDisplay.debugSuggestion(for: senderStatus.lastErrorText)
 
         if let lastSendAt = senderStatus.lastSendAt {
             lastSendText = String(format: "%.2fs ago", now.timeIntervalSince(lastSendAt))
         } else {
             lastSendText = "Never"
         }
+    }
+
+    func driveStatusText(motionStatus: HeadTrackingStatus) -> String {
+        driveErrorText ?? motionStatus.driveDisplayName
+    }
+}
+
+enum HeadTrackingErrorDisplay {
+    static func driveLabel(for errorText: String?) -> String? {
+        guard let normalized = normalized(errorText) else { return nil }
+
+        if isNetworkAddressError(normalized) {
+            return "HEAD TX NET ERROR"
+        }
+
+        if normalized.contains("invalid head tracking udp port") {
+            return "SETTINGS INVALID"
+        }
+
+        if normalized.contains("not configured") {
+            return "HEAD TX ERROR"
+        }
+
+        return "HEAD TX ERROR"
+    }
+
+    static func debugSuggestion(for errorText: String?) -> String? {
+        guard let normalized = normalized(errorText) else { return nil }
+
+        if isNetworkAddressError(normalized) || normalized.contains("invalid head tracking udp port") {
+            return "Check Windows host/IP and head-tracking UDP port."
+        }
+
+        return nil
+    }
+
+    private static func normalized(_ errorText: String?) -> String? {
+        guard let errorText else { return nil }
+        let trimmed = errorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.lowercased()
+    }
+
+    private static func isNetworkAddressError(_ normalized: String) -> Bool {
+        normalized.contains("nwerror error 49")
+            || normalized.contains("can't assign requested address")
+            || normalized.contains("cannot assign requested address")
     }
 }

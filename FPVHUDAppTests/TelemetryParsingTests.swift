@@ -314,6 +314,30 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(display.packetsSentText, "12")
         XCTAssertEqual(display.lastSendText, "0.50s ago")
         XCTAssertEqual(display.warningText, "send failed")
+        XCTAssertEqual(display.debugErrorText, "send failed")
+        XCTAssertEqual(display.driveErrorText, "HEAD TX ERROR")
+        XCTAssertNil(display.debugSuggestionText)
+        XCTAssertEqual(display.driveStatusText(motionStatus: .active), "HEAD TX ERROR")
+        XCTAssertTrue(display.hasDriveError)
+    }
+
+    func testHeadTrackingNetworkErrorMapsToCompactDriveLabel() {
+        let rawError = "The operation could not be completed. (Network.NWError error 49 - Can't assign requested address)"
+        let status = HeadTrackingSenderStatus(
+            isConfigured: true,
+            packetsSent: 4,
+            packetRateHz: 30,
+            lastSendAt: Date(),
+            lastErrorText: rawError
+        )
+
+        let display = HeadTrackingDisplayState(senderStatus: status)
+
+        XCTAssertEqual(display.debugErrorText, rawError)
+        XCTAssertEqual(display.warningText, rawError)
+        XCTAssertEqual(display.driveErrorText, "HEAD TX NET ERROR")
+        XCTAssertEqual(display.driveStatusText(motionStatus: .active), "HEAD TX NET ERROR")
+        XCTAssertEqual(display.debugSuggestionText, "Check Windows host/IP and head-tracking UDP port.")
     }
 
     func testHeadTrackingPacketEncodesDebugJSONShape() throws {
