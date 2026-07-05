@@ -15,6 +15,8 @@ Use one script per purpose:
 
 The old overlapping fake iPhone sender was removed. `send_fake_head_tracking.py` is now the canonical fake iPhone sender and includes pattern, disabled, uncentered, and malformed-packet modes.
 
+For the focused bridge checklist, see `docs/WINDOWS_BRIDGE_LOG_ONLY_TEST.md`.
+
 ## Quick Command Summary
 
 ```sh

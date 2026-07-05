@@ -29,6 +29,7 @@ DEFAULT_HEAD_STALE_MS = 300
 
 @dataclass(frozen=True)
 class BridgeConfig:
+    bridge_enabled: bool
     iphone_host: str
     telemetry_port: int
     head_bind_host: str
@@ -46,6 +47,8 @@ class HeadTrackingStats:
     valid_packets: int = 0
     invalid_packets: int = 0
     last_packet_time: float | None = None
+    last_valid_packet_time: float | None = None
+    last_valid_packet: dict[str, Any] | None = None
     last_rate_time: float = 0.0
     stale_announced: bool = False
 
@@ -152,6 +155,19 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a log-only iPhone companion bridge harness."
     )
+    bridge_group = parser.add_mutually_exclusive_group()
+    bridge_group.add_argument(
+        "--bridge-enabled",
+        dest="bridge_enabled",
+        action="store_true",
+        help="Run the log-only telemetry/head-tracking bridge.",
+    )
+    bridge_group.add_argument(
+        "--bridge-disabled",
+        dest="bridge_enabled",
+        action="store_false",
+        help="Validate config, print safety state, and exit without opening UDP sockets.",
+    )
     parser.add_argument("--iphone-host", default=DEFAULT_IPHONE_HOST, help="iPhone or Simulator IP")
     parser.add_argument(
         "--telemetry-port",
@@ -191,6 +207,7 @@ def parse_args() -> argparse.Namespace:
         help="Do not generate demo telemetry; only receive/log head tracking.",
     )
     parser.set_defaults(demo_telemetry=True)
+    parser.set_defaults(bridge_enabled=True)
     return parser.parse_args()
 
 
@@ -212,6 +229,7 @@ def config_from_args(args: argparse.Namespace) -> BridgeConfig:
         raise SystemExit("--duration must be non-negative")
 
     return BridgeConfig(
+        bridge_enabled=args.bridge_enabled,
         iphone_host=iphone_host,
         telemetry_port=args.telemetry_port,
         head_bind_host=args.head_bind_host,
@@ -223,15 +241,43 @@ def config_from_args(args: argparse.Namespace) -> BridgeConfig:
     )
 
 
-def print_head_rate(stats: HeadTrackingStats, now: float) -> None:
+def print_head_rate(stats: HeadTrackingStats, now: float, stale_seconds: float) -> None:
     if now - stats.last_rate_time < 1.0:
         return
+    state = head_state(stats, now, stale_seconds)
+    age_label = "--"
+    yaw_label = "--"
+    pitch_label = "--"
+    roll_label = "--"
+    enabled_label = "--"
+    centered_label = "--"
+    if stats.last_valid_packet is not None and stats.last_valid_packet_time is not None:
+        age_label = f"{int((now - stats.last_valid_packet_time) * 1000)}ms"
+        yaw_label = f"{stats.last_valid_packet['yaw_deg']:.2f}"
+        pitch_label = f"{stats.last_valid_packet['pitch_deg']:.2f}"
+        roll_label = f"{stats.last_valid_packet['roll_deg']:.2f}"
+        enabled_label = str(stats.last_valid_packet["tracking_enabled"])
+        centered_label = str(stats.last_valid_packet["centered"])
     print(
         "head_rx_rate="
-        f"{stats.window_packets}/s valid={stats.valid_packets} invalid={stats.invalid_packets}"
+        f"{stats.window_packets}/s valid={stats.valid_packets} invalid={stats.invalid_packets} "
+        f"state={state} last_age={age_label} yaw={yaw_label} pitch={pitch_label} "
+        f"roll={roll_label} enabled={enabled_label} centered={centered_label}"
     )
     stats.window_packets = 0
     stats.last_rate_time = now
+
+
+def head_state(stats: HeadTrackingStats, now: float, stale_seconds: float = DEFAULT_HEAD_STALE_MS / 1000.0) -> str:
+    if stats.last_valid_packet is None or stats.last_valid_packet_time is None:
+        return "IDLE"
+    if now - stats.last_valid_packet_time > stale_seconds:
+        return "STALE"
+    if not stats.last_valid_packet["tracking_enabled"]:
+        return "INACTIVE"
+    if stats.last_valid_packet["centered"] is not True:
+        return "NOT_CENTERED"
+    return "ACTIVE"
 
 
 def receive_head_packet(sock: socket.socket, stats: HeadTrackingStats, stale_seconds: float) -> None:
@@ -240,9 +286,9 @@ def receive_head_packet(sock: socket.socket, stats: HeadTrackingStats, stale_sec
         data, addr = sock.recvfrom(4096)
     except socket.timeout:
         if (
-            stats.last_packet_time is not None
+            stats.last_valid_packet_time is not None
             and not stats.stale_announced
-            and now - stats.last_packet_time > stale_seconds
+            and now - stats.last_valid_packet_time > stale_seconds
         ):
             print(f"HEAD TRACK STALE: no iPhone packet for >{int(stale_seconds * 1000)} ms")
             stats.stale_announced = True
@@ -262,6 +308,8 @@ def receive_head_packet(sock: socket.socket, stats: HeadTrackingStats, stale_sec
         return
 
     stats.valid_packets += 1
+    stats.last_valid_packet_time = now
+    stats.last_valid_packet = packet
     receive_ms = int(time.time() * 1000)
     age_ms = receive_ms - packet["timestamp_ms"]
     centered = "--" if packet["centered"] is None else packet["centered"]
@@ -303,6 +351,13 @@ def maybe_send_telemetry(
 
 def main() -> int:
     config = config_from_args(parse_args())
+    print("iPhone companion bridge harness: LOG-ONLY")
+    print("safety: no CRSF mapping, no servo/gimbal/car commands, no joystick interference")
+    print(f"bridge_enabled={config.bridge_enabled}")
+    if not config.bridge_enabled:
+        print("bridge disabled: no UDP sockets opened, no telemetry forwarded, no head input received")
+        return 0
+
     telemetry_destination = (config.iphone_host, config.telemetry_port)
     telemetry_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     head_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -316,8 +371,6 @@ def main() -> int:
     telemetry_interval = 1.0 / config.telemetry_rate_hz
     stale_seconds = config.head_stale_ms / 1000.0
 
-    print("iPhone companion bridge harness: LOG-ONLY")
-    print("safety: no CRSF mapping, no servo/gimbal/car commands, no joystick interference")
     print(
         f"telemetry -> {telemetry_destination[0]}:{telemetry_destination[1]} "
         f"at {config.telemetry_rate_hz:g} Hz "
@@ -341,7 +394,7 @@ def main() -> int:
                 config.demo_telemetry,
             )
             receive_head_packet(head_sock, stats, stale_seconds)
-            print_head_rate(stats, time.monotonic())
+            print_head_rate(stats, time.monotonic(), stale_seconds)
 
     except KeyboardInterrupt:
         print("\nstopped by user")
