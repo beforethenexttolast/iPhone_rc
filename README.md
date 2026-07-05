@@ -14,6 +14,7 @@ Windows remains the integration point and authority for forwarding head-tracking
 Video is a separate future path: the preferred low-latency iPhone Option A is direct APFPV RTP/UDP H.265 from camera to iPhone, not Windows-forwarded or Windows-re-encoded video.
 
 The formal bench-test packet contract is documented in `docs/PROTOCOL_CONTRACT.md`, with JSON schemas in `schemas/` and examples in `examples/`.
+The future safety design for mapping iPhone head tracking into camera pan/tilt is documented in `docs/FUTURE_HEAD_TRACKING_TO_PAN_TILT_SAFETY.md`; no active mapping is implemented yet.
 
 ## Architecture
 
