@@ -325,6 +325,61 @@ These packets are still only intent packets to Windows. The iPhone app does not 
 
 Head tracking is independent from the future native APFPV video path. The phone may eventually receive video directly from the APFPV camera while still sending head-look intent only to Windows.
 
+## Windows iPhone Companion Bridge Harness
+
+The actual Windows ground-station repo is separate from this iOS checkout. This repo includes a log-only bridge harness that mirrors the first Windows integration milestone and can be copied into, or ported to, the ground-station app:
+
+```sh
+python3 scripts/iphone_companion_bridge.py \
+  --iphone-host 127.0.0.1 \
+  --telemetry-port 5601 \
+  --head-port 5602
+```
+
+The bridge harness:
+
+- Forwards normalized telemetry JSON snapshots to the configured iPhone/Simulator telemetry UDP port.
+- Receives iPhone head-tracking UDP JSON packets on the configured input port.
+- Validates `seq`, `timestamp_ms`, `yaw_deg`, `pitch_deg`, `roll_deg`, `tracking_enabled`, and optional `centered`.
+- Logs packet age, packet rate, yaw/pitch/roll, enabled/centered state, and stale state if packets stop for more than `300 ms`.
+- Is explicitly log-only: it does not map head tracking to CRSF channels 9/10, does not command the gimbal, and does not interfere with joystick/control flow.
+
+Config options:
+
+```sh
+python3 scripts/iphone_companion_bridge.py --help
+```
+
+Important options are `--iphone-host`, `--telemetry-port`, `--head-port`, `--telemetry-rate`, and `--head-stale-ms`.
+
+To test the bridge without an iPhone, run the bridge in one terminal and send fake iPhone head-tracking packets from another:
+
+```sh
+python3 scripts/iphone_companion_bridge.py --iphone-host 127.0.0.1 --duration 10
+python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --port 5602 --duration 5
+```
+
+To test stale logging:
+
+```sh
+python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --drop-after 2 --idle-after-stop 2
+```
+
+To test malformed packet rejection:
+
+```sh
+python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --malformed
+python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --malformed-every 10 --duration 3
+```
+
+To verify telemetry format compatibility with the iPhone app directly, use the existing telemetry sender:
+
+```sh
+python3 scripts/send_demo_telemetry.py --host 127.0.0.1 --port 5601 --rate 20
+```
+
+On the real Windows ground station, the harness's `make_demo_telemetry` source should be replaced by the already-normalized CRSF/ELRS telemetry snapshot from the app. Head-tracking packets should remain log-only until a later, separately reviewed safety milestone maps them into pan/tilt intent and CRSF channel output.
+
 ## Future Native APFPV Video
 
 The Windows roadmap identifies H.265/WebRTC/live video as a bench risk on the Windows side. That does not change the preferred low-latency iPhone Option A:
@@ -352,7 +407,7 @@ Windows remains responsible for telemetry forwarding and head-tracking integrati
 - HEVC depacketization.
 - VideoToolbox decode.
 - WebRTC.
-- Windows app changes.
+- Direct integration into the separate `w17-ground-station` repo from this checkout.
 - Any direct servo, ESC, or gimbal command path from iPhone.
 - Raw CRSF parsing inside the iPhone app.
 
