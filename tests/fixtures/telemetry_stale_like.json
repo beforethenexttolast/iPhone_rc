@@ -1,0 +1,21 @@
+{
+  "protocol_version": 1,
+  "timestamp_ms": 1783184401000,
+  "battery_v": 13.9,
+  "link_quality": 68,
+  "rssi_dbm": -78,
+  "snr_db": 8,
+  "speed_kmh": 18.6,
+  "gear": 2,
+  "drive_mode": "GEARBOX",
+  "ers_percent": 21,
+  "throttle": 0.24,
+  "brake": 0.0,
+  "steering": 0.31,
+  "camera_yaw_deg": 4.5,
+  "camera_pitch_deg": -2.0,
+  "head_tracking_mode": "DS4",
+  "video_lock": true,
+  "warning": "SIMULATED STALE SOURCE",
+  "stale_data_warnings": ["speed", "flightMode"]
+}

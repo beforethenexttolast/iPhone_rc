@@ -8,14 +8,16 @@ this repo. It is not a general-purpose JSON Schema implementation.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
+import time
 from pathlib import Path
 from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CHECKS = (
+EXAMPLE_CHECKS = (
     (
         REPO_ROOT / "schemas" / "telemetry_snapshot.schema.json",
         REPO_ROOT / "examples" / "telemetry_snapshot.example.json",
@@ -24,6 +26,35 @@ CHECKS = (
         REPO_ROOT / "schemas" / "head_tracking_packet.schema.json",
         REPO_ROOT / "examples" / "head_tracking_packet.example.json",
     ),
+)
+VALID_FIXTURE_CHECKS = (
+    (
+        REPO_ROOT / "schemas" / "telemetry_snapshot.schema.json",
+        REPO_ROOT / "tests" / "fixtures" / "telemetry_fresh.json",
+    ),
+    (
+        REPO_ROOT / "schemas" / "telemetry_snapshot.schema.json",
+        REPO_ROOT / "tests" / "fixtures" / "telemetry_stale_like.json",
+    ),
+    (
+        REPO_ROOT / "schemas" / "head_tracking_packet.schema.json",
+        REPO_ROOT / "tests" / "fixtures" / "head_tracking_ready.json",
+    ),
+    (
+        REPO_ROOT / "schemas" / "head_tracking_packet.schema.json",
+        REPO_ROOT / "tests" / "fixtures" / "head_tracking_active.json",
+    ),
+    (
+        REPO_ROOT / "schemas" / "head_tracking_packet.schema.json",
+        REPO_ROOT / "tests" / "fixtures" / "head_tracking_uncentered.json",
+    ),
+)
+JSON_PARSE_ONLY_FIXTURES = (
+    REPO_ROOT / "tests" / "fixtures" / "telemetry_minimal.json",
+)
+MALFORMED_FIXTURES = (
+    REPO_ROOT / "tests" / "fixtures" / "telemetry_malformed.json",
+    REPO_ROOT / "tests" / "fixtures" / "head_tracking_malformed.json",
 )
 
 
@@ -117,6 +148,54 @@ def validate_pair(schema_path: Path, example_path: Path) -> None:
     print(f"ok {example_path.relative_to(REPO_ROOT)}")
 
 
+def load_script_module(name: str) -> Any:
+    path = REPO_ROOT / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ValidationError(f"could not import {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def validate_generated_packets() -> None:
+    telemetry_schema = load_json(REPO_ROOT / "schemas" / "telemetry_snapshot.schema.json")
+    head_schema = load_json(REPO_ROOT / "schemas" / "head_tracking_packet.schema.json")
+    telemetry_sender = load_script_module("send_demo_telemetry")
+    fake_head_sender = load_script_module("send_fake_head_tracking")
+
+    telemetry_packet = telemetry_sender.make_packet(time.monotonic(), 1, "normal")
+    validate_value(telemetry_packet, telemetry_schema)
+    print("ok scripts/send_demo_telemetry.py generated packet")
+
+    head_packet = fake_head_sender.make_packet(
+        seq=1,
+        yaw_deg=-12.5,
+        pitch_deg=6.8,
+        roll_deg=1.2,
+        tracking_enabled=True,
+        centered=True,
+    )
+    validate_value(head_packet, head_schema)
+    print("ok scripts/send_fake_head_tracking.py generated packet")
+
+
+def validate_parse_only_fixtures() -> None:
+    for path in JSON_PARSE_ONLY_FIXTURES:
+        load_json(path)
+        print(f"ok {path.relative_to(REPO_ROOT)}")
+
+
+def validate_malformed_fixtures() -> None:
+    for path in MALFORMED_FIXTURES:
+        try:
+            load_json(path)
+        except json.JSONDecodeError:
+            print(f"ok {path.relative_to(REPO_ROOT)} rejected")
+            continue
+        raise ValidationError(f"{path.relative_to(REPO_ROOT)} should be malformed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate FPV HUD protocol examples.")
     parser.add_argument(
@@ -126,8 +205,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    for schema_path, example_path in CHECKS:
+    for schema_path, example_path in EXAMPLE_CHECKS:
         validate_pair(schema_path, example_path)
+
+    for schema_path, example_path in VALID_FIXTURE_CHECKS:
+        validate_pair(schema_path, example_path)
+
+    validate_parse_only_fixtures()
+    validate_malformed_fixtures()
+    validate_generated_packets()
 
     if not args.quiet:
         print("protocol examples validated")

@@ -341,6 +341,146 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(object["timeout_ms"] as? Int, 250)
     }
 
+    func testGoldenTelemetryFixturesDecodeIntoIOSState() throws {
+        let fresh = try TelemetryJSONDecoder.decodeState(
+            from: fixtureData("telemetry_fresh.json"),
+            previous: .demo
+        )
+
+        XCTAssertEqual(fresh.batteryVoltage, 14.8)
+        XCTAssertEqual(fresh.linkQualityPercent, 92)
+        XCTAssertEqual(fresh.rssiDbm, -62)
+        XCTAssertEqual(fresh.snrDb, 18)
+        XCTAssertEqual(fresh.speedKmh, 12.4)
+        XCTAssertEqual(fresh.gear, 3)
+        XCTAssertEqual(fresh.driveMode, .gearboxERS)
+        XCTAssertEqual(fresh.ersPercent, 55)
+        XCTAssertEqual(fresh.panTiltMode, .disabled)
+        XCTAssertTrue(fresh.videoLock)
+        XCTAssertEqual(fresh.mode, .udp)
+
+        let staleLike = try TelemetryJSONDecoder.decodeState(
+            from: fixtureData("telemetry_stale_like.json"),
+            previous: .demo
+        )
+
+        XCTAssertEqual(staleLike.linkQualityPercent, 68)
+        XCTAssertEqual(staleLike.driveMode, .gearbox)
+        XCTAssertEqual(staleLike.panTiltMode, .dualShock)
+        XCTAssertEqual(staleLike.warningText, "SIMULATED STALE SOURCE")
+        XCTAssertEqual(staleLike.staleDataWarnings, [.speed, .flightMode])
+    }
+
+    func testGoldenTelemetryMinimalFixtureMergesWithPreviousState() throws {
+        let previous = makeLiveTelemetry(timestamp: Date())
+
+        let minimal = try TelemetryJSONDecoder.decodeState(
+            from: fixtureData("telemetry_minimal.json"),
+            previous: previous
+        )
+
+        XCTAssertEqual(minimal.batteryVoltage, 12.6)
+        XCTAssertEqual(minimal.linkQualityPercent, previous.linkQualityPercent)
+        XCTAssertEqual(minimal.rssiDbm, previous.rssiDbm)
+        XCTAssertEqual(minimal.snrDb, previous.snrDb)
+        XCTAssertEqual(minimal.speedKmh, previous.speedKmh)
+        XCTAssertEqual(minimal.gear, previous.gear)
+        XCTAssertEqual(minimal.ersPercent, previous.ersPercent)
+        XCTAssertEqual(minimal.mode, .udp)
+    }
+
+    func testGoldenTelemetryMalformedFixtureIsRejectedSafely() throws {
+        let previous = makeLiveTelemetry(timestamp: Date())
+
+        XCTAssertThrowsError(
+            try TelemetryJSONDecoder.decodeState(
+                from: fixtureData("telemetry_malformed.json"),
+                previous: previous
+            )
+        )
+
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: previous,
+            receiverStatus: TelemetryReceiverStatus(
+                isListening: true,
+                lastPacketReceivedAt: Date(),
+                lastPacketAge: 0,
+                malformedPacketCount: 1,
+                warningText: "Malformed telemetry JSON"
+            ),
+            settings: realTelemetrySettings()
+        )
+
+        XCTAssertTrue(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "14.8 V")
+        XCTAssertEqual(display.linkQualityText, "92%")
+        XCTAssertEqual(display.speedText, "12 km/h")
+        XCTAssertEqual(display.gearText, "G3")
+    }
+
+    func testGoldenTelemetryFixtureClearsUnsafeValuesWhenLost() throws {
+        let fresh = try TelemetryJSONDecoder.decodeState(
+            from: fixtureData("telemetry_fresh.json"),
+            previous: .demo
+        )
+        let now = Date()
+
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: fresh,
+            receiverStatus: makeTelemetryStatus(age: 3.2, now: now),
+            settings: realTelemetrySettings(),
+            now: now
+        )
+
+        XCTAssertFalse(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "--.- V")
+        XCTAssertEqual(display.linkQualityText, "--")
+        XCTAssertEqual(display.rssiText, "--")
+        XCTAssertEqual(display.snrText, "--")
+        XCTAssertEqual(display.speedText, "-- km/h")
+        XCTAssertEqual(display.gearText, "--")
+        XCTAssertEqual(display.ersText, "--")
+        XCTAssertEqual(display.warningText, "TELEMETRY DATA LOST >3S")
+    }
+
+    func testGoldenHeadTrackingFixturesMatchSchemaShape() throws {
+        try assertHeadTrackingFixtureSchema("head_tracking_ready.json", enabled: false, centered: true)
+        try assertHeadTrackingFixtureSchema("head_tracking_active.json", enabled: true, centered: true)
+        try assertHeadTrackingFixtureSchema("head_tracking_uncentered.json", enabled: true, centered: false)
+    }
+
+    func testGoldenHeadTrackingMalformedFixtureIsRejected() throws {
+        XCTAssertThrowsError(
+            try JSONSerialization.jsonObject(with: fixtureData("head_tracking_malformed.json"))
+        )
+    }
+
+    func testHeadTrackingEncoderOutputMatchesContractSchemaShape() throws {
+        let packet = HeadTrackingPacket(
+            seq: 42,
+            timestampMs: 1783184400000,
+            yawDeg: -12.5,
+            pitchDeg: 6.8,
+            rollDeg: 1.2,
+            trackingEnabled: true,
+            centered: true,
+            timeoutMs: 250
+        )
+
+        let data = try JSONEncoder().encode(packet)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["seq"] as? Int, 42)
+        XCTAssertEqual(object["timestamp_ms"] as? Int, 1783184400000)
+        XCTAssertEqual(object["yaw_deg"] as? Double, -12.5)
+        XCTAssertEqual(object["pitch_deg"] as? Double, 6.8)
+        XCTAssertEqual(object["roll_deg"] as? Double, 1.2)
+        XCTAssertEqual(object["tracking_enabled"] as? Bool, true)
+        XCTAssertEqual(object["centered"] as? Bool, true)
+        XCTAssertEqual(object["timeout_ms"] as? Int, 250)
+        XCTAssertNil(object["protocol_version"])
+    }
+
     func testIncomingTelemetryPacketMergesPartialJSON() throws {
         let json = """
         {
@@ -871,6 +1011,32 @@ final class TelemetryParsingTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private func fixtureData(_ name: String) throws -> Data {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot = testFile.deletingLastPathComponent().deletingLastPathComponent()
+        return try Data(contentsOf: repoRoot.appendingPathComponent("tests/fixtures/\(name)"))
+    }
+
+    private func assertHeadTrackingFixtureSchema(
+        _ name: String,
+        enabled: Bool,
+        centered: Bool
+    ) throws {
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: fixtureData(name)) as? [String: Any]
+        )
+
+        XCTAssertEqual(object["protocol_version"] as? Int, 1)
+        XCTAssertNotNil(object["seq"] as? Int)
+        XCTAssertNotNil(object["timestamp_ms"] as? Int)
+        XCTAssertNotNil(object["yaw_deg"] as? Double)
+        XCTAssertNotNil(object["pitch_deg"] as? Double)
+        XCTAssertNotNil(object["roll_deg"] as? Double)
+        XCTAssertEqual(object["tracking_enabled"] as? Bool, enabled)
+        XCTAssertEqual(object["centered"] as? Bool, centered)
+        XCTAssertEqual(object["timeout_ms"] as? Int, 250)
     }
 
     private func inspectNAL(type: UInt8) throws -> H265NALInspection {

@@ -1,0 +1,21 @@
+{
+  "protocol_version": 1,
+  "timestamp_ms": 1783184400000,
+  "battery_v": 14.8,
+  "link_quality": 92,
+  "rssi_dbm": -62,
+  "snr_db": 18,
+  "speed_kmh": 12.4,
+  "gear": 3,
+  "drive_mode": "GEARBOX_ERS",
+  "ers_percent": 55,
+  "throttle": 0.43,
+  "brake": 0.0,
+  "steering": -0.15,
+  "camera_yaw_deg": -12.0,
+  "camera_pitch_deg": 5.0,
+  "head_tracking_mode": "OFF",
+  "video_lock": true,
+  "warning": "",
+  "stale_data_warnings": []
+}

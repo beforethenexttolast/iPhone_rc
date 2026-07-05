@@ -1,0 +1,11 @@
+{
+  "protocol_version": 1,
+  "seq": 11,
+  "timestamp_ms": 1783184400033,
+  "yaw_deg": -12.5,
+  "pitch_deg": 6.8,
+  "roll_deg": 1.2,
+  "tracking_enabled": true,
+  "centered": true,
+  "timeout_ms": 250
+}
