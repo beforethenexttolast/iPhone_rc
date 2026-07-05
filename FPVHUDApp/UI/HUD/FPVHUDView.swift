@@ -116,10 +116,33 @@ struct DebugHUDView: View {
                                 DebugRow("Video", viewModel.telemetryDisplay.videoText)
                             }
 
+                            DebugPanel(title: "APFPV RTP Diagnostic") {
+                                DebugRow("Enabled", viewModel.settings.apfpvDiagnosticEnabled ? "Yes" : "No")
+                                DebugRow("Listener", apfpvListenerText)
+                                DebugRow("UDP port", "\(viewModel.apfpvDiagnosticStatus.port)")
+                                DebugRow("Packets", "\(viewModel.apfpvDiagnosticStatus.packetsReceived)")
+                                DebugRow("Rate", String(format: "%.0f/s", viewModel.apfpvDiagnosticStatus.packetsPerSecond))
+                                DebugRow("Bitrate", String(format: "%.1f kbps", viewModel.apfpvDiagnosticStatus.bitrateKbps))
+                                DebugRow("Last age", apfpvLastPacketAgeText)
+                                DebugRow("Payload type", optionalUInt8Text(viewModel.apfpvDiagnosticStatus.lastPayloadType))
+                                DebugRow("Seq", optionalUInt16Text(viewModel.apfpvDiagnosticStatus.lastSequenceNumber))
+                                DebugRow("Timestamp", optionalUInt32Text(viewModel.apfpvDiagnosticStatus.lastTimestamp))
+                                DebugRow("SSRC", optionalHexText(viewModel.apfpvDiagnosticStatus.lastSSRC))
+                                DebugRow("NAL", viewModel.apfpvDiagnosticStatus.lastNALDescription ?? "--")
+                                DebugRow("VPS/SPS/PPS", apfpvParameterSetText)
+                                DebugRow("Gaps", "\(viewModel.apfpvDiagnosticStatus.sequenceGaps)")
+                                DebugRow("Out of order", "\(viewModel.apfpvDiagnosticStatus.outOfOrderPackets)")
+                                DebugRow("Malformed", "\(viewModel.apfpvDiagnosticStatus.malformedPackets)")
+                                if let warning = viewModel.apfpvDiagnosticStatus.warningText {
+                                    DebugWarning(text: warning)
+                                }
+                            }
+
                             DebugPanel(title: "Network Settings") {
                                 DebugRow("Windows host", viewModel.settings.windowsHost)
                                 DebugRow("Telemetry UDP", "\(viewModel.settings.telemetryPort)")
                                 DebugRow("Head UDP", "\(viewModel.settings.headTrackingPort)")
+                                DebugRow("APFPV UDP", "\(viewModel.settings.apfpvDiagnosticPort)")
                                 DebugRow("Motion rate", "\(viewModel.settings.motionUpdateHz) Hz")
                                 DebugRow("Demo mode", viewModel.settings.demoModeEnabled ? "On" : "Off")
                                 Button {
@@ -145,6 +168,41 @@ struct DebugHUDView: View {
         guard !viewModel.settings.demoModeEnabled else { return "Demo" }
         guard let age = viewModel.telemetryStatus.lastPacketAge else { return "Waiting" }
         return String(format: "%.2fs", age)
+    }
+
+    private var apfpvListenerText: String {
+        guard viewModel.settings.apfpvDiagnosticEnabled else { return "Disabled" }
+        return viewModel.apfpvDiagnosticStatus.isListening ? "Listening" : "Stopped"
+    }
+
+    private var apfpvLastPacketAgeText: String {
+        guard let age = viewModel.apfpvDiagnosticStatus.lastPacketAge else { return "Waiting" }
+        return String(format: "%.2fs", age)
+    }
+
+    private var apfpvParameterSetText: String {
+        let status = viewModel.apfpvDiagnosticStatus
+        return "VPS \(status.seenVPS ? "Y" : "N") / SPS \(status.seenSPS ? "Y" : "N") / PPS \(status.seenPPS ? "Y" : "N")"
+    }
+
+    private func optionalUInt8Text(_ value: UInt8?) -> String {
+        guard let value else { return "--" }
+        return "\(value)"
+    }
+
+    private func optionalUInt16Text(_ value: UInt16?) -> String {
+        guard let value else { return "--" }
+        return "\(value)"
+    }
+
+    private func optionalUInt32Text(_ value: UInt32?) -> String {
+        guard let value else { return "--" }
+        return "\(value)"
+    }
+
+    private func optionalHexText(_ value: UInt32?) -> String {
+        guard let value else { return "--" }
+        return String(format: "0x%08X", value)
     }
 
     private func debugHorizontalPadding(for proxy: GeometryProxy) -> CGFloat {

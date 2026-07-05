@@ -9,6 +9,7 @@ final class FPVHUDViewModel: ObservableObject {
     @Published var settingsValidation = AppSettingsValidator.validate(.defaults)
     @Published var telemetryStatus: TelemetryReceiverStatus = .idle
     @Published var headTrackingDisplay = HeadTrackingDisplayState.idle
+    @Published var apfpvDiagnosticStatus = APFPVDiagnosticStatus.idle
     @Published var isSettingsPresented = false
     @Published var mockMotionControls = MockMotionControlState.unavailable
 
@@ -16,6 +17,7 @@ final class FPVHUDViewModel: ObservableObject {
     private let udpTelemetry = UDPTelemetryReceiver()
     private let motionService: MotionService
     private let headTrackingSender = HeadTrackingSender()
+    private let apfpvDiagnosticReceiver = APFPVDiagnosticReceiver()
     private let settingsStore: SettingsStore
 
     private var rawYawDeg: Double = 0
@@ -79,6 +81,7 @@ final class FPVHUDViewModel: ObservableObject {
     private func applyRuntimeSettings() {
         updateHeadTrackingSenderConfiguration()
         startHeadTrackingSendTimer()
+        updateAPFPVDiagnosticReceiver()
 
         if settings.demoModeEnabled {
             udpTelemetry.stop()
@@ -153,8 +156,10 @@ final class FPVHUDViewModel: ObservableObject {
         demoTelemetry.stop()
         udpTelemetry.stop()
         headTrackingSender.stop()
+        apfpvDiagnosticReceiver.stop()
         lastRawTelemetry = nil
         telemetryStatus = .idle
+        apfpvDiagnosticStatus = .idle
         refreshTelemetryDisplay()
         motionStatusTimer?.cancel()
         motionStatusTimer = nil
@@ -185,6 +190,12 @@ final class FPVHUDViewModel: ObservableObject {
         headTrackingSender.onStatus = { [weak self] status in
             Task { @MainActor in
                 self?.headTrackingDisplay = HeadTrackingDisplayState(senderStatus: status)
+            }
+        }
+
+        apfpvDiagnosticReceiver.onStatus = { [weak self] status in
+            Task { @MainActor in
+                self?.apfpvDiagnosticStatus = status
             }
         }
 
@@ -251,6 +262,15 @@ final class FPVHUDViewModel: ObservableObject {
         )
     }
 
+    private func updateAPFPVDiagnosticReceiver() {
+        guard settings.apfpvDiagnosticEnabled else {
+            apfpvDiagnosticReceiver.stop()
+            return
+        }
+
+        apfpvDiagnosticReceiver.start(port: settings.apfpvDiagnosticPort)
+    }
+
     private func updateMotionState(sampleTimestamp: Date? = nil) {
         let timestamp = sampleTimestamp ?? motion.timestamp
         let centeredYaw = normalizedAngle(rawYawDeg - centerYawDeg)
@@ -307,6 +327,7 @@ final class FPVHUDViewModel: ObservableObject {
             Task { @MainActor in
                 self?.updateMotionState()
                 self?.refreshTelemetryDisplay()
+                self?.apfpvDiagnosticReceiver.refreshStatus()
             }
         }
         timer.resume()

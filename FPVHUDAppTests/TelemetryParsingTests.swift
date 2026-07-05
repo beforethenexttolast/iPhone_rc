@@ -32,6 +32,20 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(store.load(), settings)
     }
 
+    func testSettingsStoreDoesNotPersistAPFPVDiagnosticEnabled() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+        var settings = AppSettings.defaults
+        settings.apfpvDiagnosticPort = 5700
+        settings.apfpvDiagnosticEnabled = true
+
+        store.save(settings)
+
+        let loaded = store.load()
+        XCTAssertEqual(loaded.apfpvDiagnosticPort, 5700)
+        XCTAssertFalse(loaded.apfpvDiagnosticEnabled)
+    }
+
     func testSettingsStoreResetRestoresDefaults() {
         let defaults = makeIsolatedDefaults()
         let store = SettingsStore(defaults: defaults)
@@ -178,6 +192,71 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(sample?.yawDeg, 12.5)
         XCTAssertEqual(sample?.pitchDeg, -4.5)
         XCTAssertEqual(sample?.rollDeg, 2.25)
+    }
+
+    func testRTPHeaderParserMapsSyntheticPacketFields() throws {
+        let packet = makeRTPPacket(
+            payloadType: 96,
+            sequenceNumber: 0x1234,
+            timestamp: 0x01020304,
+            ssrc: 0xAABBCCDD,
+            payload: makeH265NALHeader(type: 32) + [0x01, 0x02]
+        )
+
+        let header = try RTPDiagnosticParser.parseHeader(packet)
+
+        XCTAssertEqual(header.version, 2)
+        XCTAssertFalse(header.padding)
+        XCTAssertFalse(header.extensionHeader)
+        XCTAssertFalse(header.marker)
+        XCTAssertEqual(header.payloadType, 96)
+        XCTAssertEqual(header.sequenceNumber, 0x1234)
+        XCTAssertEqual(header.timestamp, 0x01020304)
+        XCTAssertEqual(header.ssrc, 0xAABBCCDD)
+        XCTAssertEqual(header.headerLength, 12)
+    }
+
+    func testH265PayloadInspectionIdentifiesVpsSpsPps() throws {
+        let vps = try inspectNAL(type: 32)
+        let sps = try inspectNAL(type: 33)
+        let pps = try inspectNAL(type: 34)
+
+        XCTAssertTrue(vps.isVPS)
+        XCTAssertEqual(vps.displayName, "VPS (32)")
+        XCTAssertTrue(sps.isSPS)
+        XCTAssertEqual(sps.displayName, "SPS (33)")
+        XCTAssertTrue(pps.isPPS)
+        XCTAssertEqual(pps.displayName, "PPS (34)")
+    }
+
+    func testH265PayloadInspectionIdentifiesFragmentedOriginalNalType() throws {
+        let payload = makeH265NALHeader(type: 49) + [0x80 | 32, 0xAA, 0xBB]
+        let packet = makeRTPPacket(payloadType: 96, sequenceNumber: 7, timestamp: 99, ssrc: 42, payload: payload)
+        let header = try RTPDiagnosticParser.parseHeader(packet)
+
+        let inspection = try RTPDiagnosticParser.inspectH265Payload(packet, header: header)
+
+        XCTAssertTrue(inspection.isFragmentationUnit)
+        XCTAssertEqual(inspection.packetType, 49)
+        XCTAssertEqual(inspection.nalUnitType, 32)
+        XCTAssertTrue(inspection.isVPS)
+    }
+
+    func testRTPHeaderParserRejectsInvalidVersionAndShortPackets() {
+        XCTAssertThrowsError(try RTPDiagnosticParser.parseHeader(Data([0x80, 0x60])))
+
+        var invalidVersion = makeRTPPacket(
+            payloadType: 96,
+            sequenceNumber: 1,
+            timestamp: 2,
+            ssrc: 3,
+            payload: makeH265NALHeader(type: 32)
+        )
+        invalidVersion[0] = 0x40
+
+        XCTAssertThrowsError(try RTPDiagnosticParser.parseHeader(invalidVersion)) { error in
+            XCTAssertEqual(error as? RTPParseError, .invalidVersion(1))
+        }
     }
 
     func testTelemetryFreshnessThresholds() {
@@ -792,5 +871,46 @@ final class TelemetryParsingTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private func inspectNAL(type: UInt8) throws -> H265NALInspection {
+        let packet = makeRTPPacket(
+            payloadType: 96,
+            sequenceNumber: UInt16(type),
+            timestamp: 100,
+            ssrc: 200,
+            payload: makeH265NALHeader(type: type) + [0x00]
+        )
+        let header = try RTPDiagnosticParser.parseHeader(packet)
+        return try RTPDiagnosticParser.inspectH265Payload(packet, header: header)
+    }
+
+    private func makeRTPPacket(
+        payloadType: UInt8,
+        sequenceNumber: UInt16,
+        timestamp: UInt32,
+        ssrc: UInt32,
+        payload: [UInt8]
+    ) -> Data {
+        var bytes: [UInt8] = [
+            0x80,
+            payloadType & 0x7F,
+            UInt8(sequenceNumber >> 8),
+            UInt8(sequenceNumber & 0xFF),
+            UInt8(timestamp >> 24),
+            UInt8((timestamp >> 16) & 0xFF),
+            UInt8((timestamp >> 8) & 0xFF),
+            UInt8(timestamp & 0xFF),
+            UInt8(ssrc >> 24),
+            UInt8((ssrc >> 16) & 0xFF),
+            UInt8((ssrc >> 8) & 0xFF),
+            UInt8(ssrc & 0xFF)
+        ]
+        bytes.append(contentsOf: payload)
+        return Data(bytes)
+    }
+
+    private func makeH265NALHeader(type: UInt8) -> [UInt8] {
+        [(type & 0x3F) << 1, 0x01]
     }
 }

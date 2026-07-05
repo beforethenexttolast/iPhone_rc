@@ -37,6 +37,13 @@ struct SettingsPanelView: View {
                 Section("Modes") {
                     Toggle("Demo telemetry", isOn: $draftSettings.demoModeEnabled)
                     Toggle("Head tracking input to Windows", isOn: $draftSettings.trackingEnabled)
+                    Toggle("APFPV RTP diagnostics", isOn: $draftSettings.apfpvDiagnosticEnabled)
+                    Stepper(
+                        "APFPV diagnostic UDP: \(draftSettings.apfpvDiagnosticPort)",
+                        value: $draftSettings.apfpvDiagnosticPort,
+                        in: AppSettingsValidator.portRange
+                    )
+                    SettingsValidationMessages(messages: validation.messages(for: .apfpvDiagnosticPort))
                     Stepper(
                         "Motion rate: \(draftSettings.motionUpdateHz) Hz",
                         value: $draftSettings.motionUpdateHz,
@@ -124,6 +131,25 @@ struct SettingsPanelView: View {
                     SettingsValueRow(title: "Center pitch", value: HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterPitch))
                     SettingsValueRow(title: "Center roll", value: HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterRoll))
                 }
+
+                Section("APFPV RTP Diagnostics") {
+                    SettingsValueRow(
+                        title: "Listener",
+                        value: apfpvStateText,
+                        tint: viewModel.apfpvDiagnosticStatus.isListening ? .green : .secondary
+                    )
+                    SettingsValueRow(title: "Port", value: "\(viewModel.apfpvDiagnosticStatus.port)")
+                    SettingsValueRow(title: "Packet rate", value: String(format: "%.0f/s", viewModel.apfpvDiagnosticStatus.packetsPerSecond))
+                    SettingsValueRow(title: "Bitrate", value: String(format: "%.1f kbps", viewModel.apfpvDiagnosticStatus.bitrateKbps))
+                    SettingsValueRow(title: "Last packet age", value: apfpvLastPacketAgeText)
+                    SettingsValueRow(title: "Sequence gaps", value: "\(viewModel.apfpvDiagnosticStatus.sequenceGaps)")
+                    SettingsValueRow(title: "Out of order", value: "\(viewModel.apfpvDiagnosticStatus.outOfOrderPackets)")
+                    SettingsValueRow(title: "VPS/SPS/PPS", value: apfpvParameterSetText)
+                    if let warning = viewModel.apfpvDiagnosticStatus.warningText {
+                        Text(warning)
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
             .navigationTitle("FPV HUD Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -164,6 +190,21 @@ struct SettingsPanelView: View {
         guard !viewModel.settings.demoModeEnabled else { return "Demo" }
         guard let age = viewModel.telemetryStatus.lastPacketAge else { return "Waiting" }
         return String(format: "%.2fs", age)
+    }
+
+    private var apfpvStateText: String {
+        guard viewModel.settings.apfpvDiagnosticEnabled else { return "Disabled" }
+        return viewModel.apfpvDiagnosticStatus.isListening ? "Listening" : "Stopped"
+    }
+
+    private var apfpvLastPacketAgeText: String {
+        guard let age = viewModel.apfpvDiagnosticStatus.lastPacketAge else { return "Waiting" }
+        return String(format: "%.2fs", age)
+    }
+
+    private var apfpvParameterSetText: String {
+        let status = viewModel.apfpvDiagnosticStatus
+        return "VPS \(status.seenVPS ? "Y" : "N") / SPS \(status.seenSPS ? "Y" : "N") / PPS \(status.seenPPS ? "Y" : "N")"
     }
 
 }

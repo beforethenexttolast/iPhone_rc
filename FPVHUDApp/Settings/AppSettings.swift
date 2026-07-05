@@ -4,6 +4,8 @@ struct AppSettings: Codable, Equatable {
     var windowsHost: String = "192.168.4.2"
     var telemetryPort: Int = 5601
     var headTrackingPort: Int = 5602
+    var apfpvDiagnosticPort: Int = FutureRTPHEVCReceiver.plannedDefaultPort
+    var apfpvDiagnosticEnabled: Bool = false
     var motionUpdateHz: Int = 60
     var headTrackingSendHz: Int = 60
     var headTrackingTimeoutMs: Int = 250
@@ -11,12 +13,65 @@ struct AppSettings: Codable, Equatable {
     var demoModeEnabled: Bool = true
 
     static let defaults = AppSettings()
+
+    init(
+        windowsHost: String = "192.168.4.2",
+        telemetryPort: Int = 5601,
+        headTrackingPort: Int = 5602,
+        apfpvDiagnosticPort: Int = FutureRTPHEVCReceiver.plannedDefaultPort,
+        apfpvDiagnosticEnabled: Bool = false,
+        motionUpdateHz: Int = 60,
+        headTrackingSendHz: Int = 60,
+        headTrackingTimeoutMs: Int = 250,
+        trackingEnabled: Bool = false,
+        demoModeEnabled: Bool = true
+    ) {
+        self.windowsHost = windowsHost
+        self.telemetryPort = telemetryPort
+        self.headTrackingPort = headTrackingPort
+        self.apfpvDiagnosticPort = apfpvDiagnosticPort
+        self.apfpvDiagnosticEnabled = apfpvDiagnosticEnabled
+        self.motionUpdateHz = motionUpdateHz
+        self.headTrackingSendHz = headTrackingSendHz
+        self.headTrackingTimeoutMs = headTrackingTimeoutMs
+        self.trackingEnabled = trackingEnabled
+        self.demoModeEnabled = demoModeEnabled
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case windowsHost
+        case telemetryPort
+        case headTrackingPort
+        case apfpvDiagnosticPort
+        case apfpvDiagnosticEnabled
+        case motionUpdateHz
+        case headTrackingSendHz
+        case headTrackingTimeoutMs
+        case trackingEnabled
+        case demoModeEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let defaults = AppSettings.defaults
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        windowsHost = try container.decodeIfPresent(String.self, forKey: .windowsHost) ?? defaults.windowsHost
+        telemetryPort = try container.decodeIfPresent(Int.self, forKey: .telemetryPort) ?? defaults.telemetryPort
+        headTrackingPort = try container.decodeIfPresent(Int.self, forKey: .headTrackingPort) ?? defaults.headTrackingPort
+        apfpvDiagnosticPort = try container.decodeIfPresent(Int.self, forKey: .apfpvDiagnosticPort) ?? defaults.apfpvDiagnosticPort
+        apfpvDiagnosticEnabled = try container.decodeIfPresent(Bool.self, forKey: .apfpvDiagnosticEnabled) ?? defaults.apfpvDiagnosticEnabled
+        motionUpdateHz = try container.decodeIfPresent(Int.self, forKey: .motionUpdateHz) ?? defaults.motionUpdateHz
+        headTrackingSendHz = try container.decodeIfPresent(Int.self, forKey: .headTrackingSendHz) ?? defaults.headTrackingSendHz
+        headTrackingTimeoutMs = try container.decodeIfPresent(Int.self, forKey: .headTrackingTimeoutMs) ?? defaults.headTrackingTimeoutMs
+        trackingEnabled = try container.decodeIfPresent(Bool.self, forKey: .trackingEnabled) ?? defaults.trackingEnabled
+        demoModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .demoModeEnabled) ?? defaults.demoModeEnabled
+    }
 }
 
 enum AppSettingsField: String, CaseIterable {
     case windowsHost
     case telemetryPort
     case headTrackingPort
+    case apfpvDiagnosticPort
     case motionUpdateHz
     case headTrackingSendHz
     case headTrackingTimeoutMs
@@ -26,6 +81,7 @@ enum AppSettingsField: String, CaseIterable {
         case .windowsHost: return "Windows host"
         case .telemetryPort: return "Telemetry UDP port"
         case .headTrackingPort: return "Head tracking UDP port"
+        case .apfpvDiagnosticPort: return "APFPV diagnostic UDP port"
         case .motionUpdateHz: return "Motion rate"
         case .headTrackingSendHz: return "Head send rate"
         case .headTrackingTimeoutMs: return "Head timeout"
@@ -89,6 +145,15 @@ enum AppSettingsValidator {
             issues.append(
                 AppSettingsValidationIssue(
                     field: .headTrackingPort,
+                    message: "Port must be an integer from 1 to 65535."
+                )
+            )
+        }
+
+        if !portRange.contains(settings.apfpvDiagnosticPort) {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .apfpvDiagnosticPort,
                     message: "Port must be an integer from 1 to 65535."
                 )
             )
@@ -230,7 +295,9 @@ struct SettingsStore {
     }
 
     func save(_ settings: AppSettings) {
-        guard let data = try? JSONEncoder().encode(settings) else { return }
+        var persistedSettings = settings
+        persistedSettings.apfpvDiagnosticEnabled = false
+        guard let data = try? JSONEncoder().encode(persistedSettings) else { return }
         defaults.set(data, forKey: Self.storageKey)
     }
 

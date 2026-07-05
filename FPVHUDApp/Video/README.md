@@ -33,3 +33,8 @@ These paths should stay separate so video latency work does not couple to comman
 
 The current `VideoSurface` is only a placeholder that keeps the HUD and service architecture moving.
 
+## Diagnostic Receiver
+
+`APFPVDiagnosticReceiver` is a pre-decoder diagnostic tool only. When enabled from Debug/Settings it binds a UDP port, parses RTP headers, estimates packet rate/bitrate, tracks sequence gaps/out-of-order packets, and inspects H.265 RTP payload headers for NAL unit type plus VPS/SPS/PPS presence.
+
+It intentionally does not assemble H.265 access units, does not call VideoToolbox, and does not render video.

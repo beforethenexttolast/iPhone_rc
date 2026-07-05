@@ -356,13 +356,36 @@ To test the bridge without an iPhone, run the bridge in one terminal and send fa
 
 ```sh
 python3 scripts/iphone_companion_bridge.py --iphone-host 127.0.0.1 --duration 10
-python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --port 5602 --duration 5
+python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --duration 5 --pattern sine
 ```
 
-To test stale logging:
+The fake sender emits the same schema as the iPhone app:
+
+```json
+{
+  "seq": 1,
+  "timestamp_ms": 1783184400000,
+  "yaw_deg": -12.5,
+  "pitch_deg": 6.8,
+  "roll_deg": 1.2,
+  "tracking_enabled": true,
+  "centered": true
+}
+```
+
+Useful fake sender patterns:
 
 ```sh
-python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --drop-after 2 --idle-after-stop 2
+python3 scripts/send_fake_head_tracking.py --pattern static --duration 3
+python3 scripts/send_fake_head_tracking.py --pattern sweep --duration 5
+python3 scripts/send_fake_head_tracking.py --pattern noisy --duration 5
+```
+
+To verify state handling without real hardware:
+
+```sh
+python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --duration 5 --disable-after 2
+python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --duration 5 --uncentered
 ```
 
 To test malformed packet rejection:
@@ -371,6 +394,8 @@ To test malformed packet rejection:
 python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --malformed
 python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --malformed-every 10 --duration 3
 ```
+
+Neither fake sender connects to vehicle hardware. The Windows bridge remains log-only until a later reviewed safety milestone explicitly maps head-look intent into camera pan/tilt authority.
 
 To verify telemetry format compatibility with the iPhone app directly, use the existing telemetry sender:
 
@@ -400,6 +425,38 @@ This path should stay separate from:
 - Car command mixing, limits, failsafe, and CRSF channel mapping.
 
 Windows remains responsible for telemetry forwarding and head-tracking integration. It is not assumed to forward, proxy, or re-encode video for the iPhone native path.
+
+### APFPV RTP Diagnostics
+
+The app includes an optional Debug-only APFPV RTP diagnostic receiver. It is off by default, the enable switch is session-only, and it does not replace the mock video surface.
+
+Enable it in Settings with `APFPV RTP diagnostics`, then choose the UDP port, default `5600`. In Debug / Setup, the `APFPV RTP Diagnostic` panel shows:
+
+- RTP version, payload type, sequence number, timestamp, and SSRC from the latest packet.
+- Packets per second and approximate bitrate.
+- Sequence gaps and out-of-order packet count.
+- Last packet age and malformed packet count.
+- H.265 RTP payload inspection where possible, including VPS/SPS/PPS detection.
+
+This mode does not assemble H.265 frames, does not call VideoToolbox, and does not prove video latency. It only confirms whether APFPV RTP-like packets are reaching the iPhone and whether the RTP/H.265 headers look plausible.
+
+Simulator test:
+
+```sh
+python3 scripts/send_synthetic_rtp.py \
+  --host 127.0.0.1 \
+  --port 5600 \
+  --rate 60 \
+  --duration 5 \
+  --include-parameter-sets
+```
+
+To exercise diagnostic counters:
+
+```sh
+python3 scripts/send_synthetic_rtp.py --host 127.0.0.1 --gap-every 20 --duration 5
+python3 scripts/send_synthetic_rtp.py --host 127.0.0.1 --out-of-order-every 20 --duration 5
+```
 
 ## Intentionally Stubbed
 
