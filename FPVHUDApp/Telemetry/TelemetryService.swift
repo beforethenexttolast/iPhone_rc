@@ -16,6 +16,13 @@ struct TelemetryReceiverStatus: Equatable {
     static let idle = TelemetryReceiverStatus()
 }
 
+enum TelemetryJSONDecoder {
+    static func decodeState(from data: Data, previous: TelemetryState) throws -> TelemetryState {
+        let packet = try JSONDecoder().decode(IncomingTelemetryPacket.self, from: data)
+        return packet.merged(with: previous)
+    }
+}
+
 enum TelemetryFreshness: Equatable {
     case live
     case staleWarning

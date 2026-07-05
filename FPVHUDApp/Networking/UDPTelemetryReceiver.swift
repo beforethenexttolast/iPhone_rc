@@ -90,17 +90,13 @@ final class UDPTelemetryReceiver: TelemetrySource {
 
     private func parse(_ data: Data) {
         do {
-            let packet = try JSONDecoder().decode(IncomingTelemetryPacket.self, from: data)
             lastPacketReceivedAt = Date()
-            latestState = packet.merged(with: latestState)
+            latestState = try TelemetryJSONDecoder.decodeState(from: data, previous: latestState)
             latestState.linkState = .connected
             onTelemetry?(latestState)
             emitStatus()
         } catch {
             malformedPacketCount += 1
-            latestState.linkState = .degraded
-            latestState.warningText = "BAD TELEMETRY PACKET"
-            onTelemetry?(latestState)
             emitStatus(warningText: "Malformed telemetry JSON")
         }
     }

@@ -203,7 +203,7 @@ final class FPVHUDViewModel: ObservableObject {
     }
 
     private func updateHeadTrackingSenderConfiguration() {
-        guard settings.trackingEnabled, hasCenteredTracking else {
+        guard HeadTrackingSafety.canConfigureSender(settings: settings, hasCentered: hasCenteredTracking) else {
             headTrackingSender.stop()
             return
         }
@@ -237,7 +237,11 @@ final class FPVHUDViewModel: ObservableObject {
     }
 
     private func sendHeadTrackingIfNeeded() {
-        guard settings.trackingEnabled, HeadTrackingSafety.canSend(status: motion.status) else {
+        guard HeadTrackingSafety.canSend(
+            settings: settings,
+            status: motion.status,
+            hasCentered: hasCenteredTracking
+        ) else {
             headTrackingSender.refreshStatus()
             return
         }

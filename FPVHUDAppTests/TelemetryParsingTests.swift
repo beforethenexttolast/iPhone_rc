@@ -313,6 +313,44 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(IncomingTelemetryPacket.self, from: json))
     }
 
+    func testMalformedTelemetryDoesNotCorruptLastKnownSafeDisplayState() throws {
+        let now = Date()
+        let previous = makeLiveTelemetry(timestamp: now)
+        let malformed = """
+        {
+          "battery_v": "not-a-number",
+          "speed_kmh": 88.0
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertThrowsError(
+            try TelemetryJSONDecoder.decodeState(from: malformed, previous: previous)
+        )
+
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: previous,
+            receiverStatus: TelemetryReceiverStatus(
+                isListening: true,
+                lastPacketReceivedAt: now,
+                lastPacketAge: 0,
+                malformedPacketCount: 1,
+                warningText: "Malformed telemetry JSON"
+            ),
+            settings: realTelemetrySettings(),
+            now: now
+        )
+
+        XCTAssertTrue(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "14.8 V")
+        XCTAssertEqual(display.linkQualityText, "92%")
+        XCTAssertEqual(display.rssiText, "-62")
+        XCTAssertEqual(display.snrText, "18")
+        XCTAssertEqual(display.speedText, "12 km/h")
+        XCTAssertEqual(display.gearText, "G3")
+        XCTAssertEqual(display.ersText, "55%")
+        XCTAssertNil(display.warningText)
+    }
+
     func testIncomingTelemetryClampsControlValues() throws {
         let json = """
         {
@@ -484,7 +522,22 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertNil(AppSettingsValidator.validateHost("bad_host_name"))
     }
 
+    func testSettingsValidatorHostRules() {
+        XCTAssertNil(AppSettingsValidator.validateHost(""))
+        XCTAssertNil(AppSettingsValidator.validateHost("   "))
+        XCTAssertEqual(AppSettingsValidator.validateHost(" 10.0.0.42 "), "10.0.0.42")
+        XCTAssertEqual(AppSettingsValidator.validateHost("127.0.0.1"), "127.0.0.1")
+        XCTAssertNil(AppSettingsValidator.validateHost("256.0.0.1"))
+        XCTAssertNil(AppSettingsValidator.validateHost("192.168.1"))
+        XCTAssertNil(AppSettingsValidator.validateHost("192.168.1.1.1"))
+        XCTAssertEqual(AppSettingsValidator.validateHost("groundstation"), "groundstation")
+        XCTAssertEqual(AppSettingsValidator.validateHost("groundstation.local"), "groundstation.local")
+        XCTAssertNil(AppSettingsValidator.validateHost("-bad-host"))
+        XCTAssertNil(AppSettingsValidator.validateHost("bad_host"))
+    }
+
     func testSettingsValidatorParsesPortsRatesAndTimeoutsSafely() {
+        XCTAssertEqual(AppSettingsValidator.parsePort("1"), 1)
         XCTAssertEqual(AppSettingsValidator.parsePort("5601"), 5601)
         XCTAssertEqual(AppSettingsValidator.parsePort(" 65535 "), 65535)
         XCTAssertNil(AppSettingsValidator.parsePort("0"))
@@ -494,6 +547,7 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertNil(AppSettingsValidator.parsePort("abc"))
 
         XCTAssertEqual(AppSettingsValidator.parseSendRateHz("60"), 60)
+        XCTAssertEqual(AppSettingsValidator.parseSendRateHz("1"), 1)
         XCTAssertNil(AppSettingsValidator.parseSendRateHz("0"))
         XCTAssertNil(AppSettingsValidator.parseSendRateHz("61"))
 
@@ -502,6 +556,24 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertNil(AppSettingsValidator.parseMotionRateHz("61"))
 
         XCTAssertEqual(AppSettingsValidator.parseTimeoutMs("250"), 250)
+        XCTAssertEqual(AppSettingsValidator.parseTimeoutMs("100"), 100)
+        XCTAssertEqual(AppSettingsValidator.parseTimeoutMs("5000"), 5000)
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("99"))
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("5001"))
+    }
+
+    func testSettingsValidatorRejectsUnsafePortRateAndTimeoutValues() {
+        XCTAssertNil(AppSettingsValidator.parsePort("-1"))
+        XCTAssertNil(AppSettingsValidator.parsePort("abc"))
+        XCTAssertNil(AppSettingsValidator.parsePort("12.5"))
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("-1"))
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("abc"))
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("30.5"))
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("0"))
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("61"))
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("-1"))
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("abc"))
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("250.5"))
         XCTAssertNil(AppSettingsValidator.parseTimeoutMs("99"))
         XCTAssertNil(AppSettingsValidator.parseTimeoutMs("5001"))
     }
@@ -559,6 +631,91 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertFalse(didApply)
         XCTAssertEqual(store.load(), saved)
         XCTAssertEqual(viewModel.settings.windowsHost, saved.windowsHost)
+    }
+
+    func testHeadTrackingSendGateRequiresEnabledCenteredActiveAndValidSettings() {
+        let now = Date()
+        var settings = AppSettings.defaults
+        settings.trackingEnabled = false
+        let active = HeadTrackingSafety.status(
+            trackingEnabled: true,
+            hasCentered: true,
+            sampleTimestamp: now,
+            now: now
+        )
+
+        XCTAssertFalse(
+            HeadTrackingSafety.canSend(settings: settings, status: active, hasCentered: true)
+        )
+
+        settings.trackingEnabled = true
+
+        XCTAssertFalse(
+            HeadTrackingSafety.canSend(settings: settings, status: active, hasCentered: false)
+        )
+        XCTAssertTrue(
+            HeadTrackingSafety.canSend(settings: settings, status: active, hasCentered: true)
+        )
+        XCTAssertFalse(
+            HeadTrackingSafety.canSend(settings: settings, status: .readyNotCentered, hasCentered: false)
+        )
+        XCTAssertFalse(
+            HeadTrackingSafety.canSend(settings: settings, status: .stale, hasCentered: true)
+        )
+        XCTAssertFalse(
+            HeadTrackingSafety.canSend(settings: settings, status: .error, hasCentered: true)
+        )
+    }
+
+    func testHeadTrackingSendGateBlocksAgainAfterCalibrationReset() {
+        var settings = AppSettings.defaults
+        settings.trackingEnabled = true
+
+        XCTAssertTrue(
+            HeadTrackingSafety.canConfigureSender(settings: settings, hasCentered: true)
+        )
+        XCTAssertFalse(
+            HeadTrackingSafety.canConfigureSender(settings: settings, hasCentered: false)
+        )
+    }
+
+    func testHeadTrackingSendGateRejectsInvalidSettingsBeforeSenderStart() {
+        var settings = AppSettings.defaults
+        settings.trackingEnabled = true
+        settings.windowsHost = ""
+
+        XCTAssertFalse(
+            HeadTrackingSafety.canConfigureSender(settings: settings, hasCentered: true)
+        )
+        XCTAssertFalse(
+            HeadTrackingSafety.canSend(settings: settings, status: .active, hasCentered: true)
+        )
+    }
+
+    @MainActor
+    func testAppRestartDoesNotPersistCalibrationAsValid() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+        var settings = AppSettings.defaults
+        settings.trackingEnabled = true
+        store.save(settings)
+
+        let firstLaunch = FPVHUDViewModel(
+            motionService: MockMotionService(),
+            settingsStore: store
+        )
+        firstLaunch.centerTracking()
+        XCTAssertEqual(store.load(), settings)
+
+        let restarted = FPVHUDViewModel(
+            motionService: MockMotionService(),
+            settingsStore: store
+        )
+
+        XCTAssertTrue(restarted.settings.trackingEnabled)
+        XCTAssertFalse(
+            HeadTrackingSafety.canConfigureSender(settings: restarted.settings, hasCentered: false)
+        )
     }
 
     private func realTelemetrySettings() -> AppSettings {

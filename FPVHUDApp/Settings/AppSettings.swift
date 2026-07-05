@@ -133,6 +133,9 @@ enum AppSettingsValidator {
         if looksLikeIPv4(trimmed) {
             return isValidIPv4(trimmed) ? trimmed : nil
         }
+        if looksLikeMalformedNumericIPv4(trimmed) {
+            return nil
+        }
         guard isValidIPv4(trimmed) || isValidHostname(trimmed) else { return nil }
         return trimmed
     }
@@ -175,6 +178,14 @@ enum AppSettingsValidator {
     private static func looksLikeIPv4(_ host: String) -> Bool {
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 4 else { return false }
+        return parts.allSatisfy { part in
+            !part.isEmpty && part.allSatisfy(\.isNumber)
+        }
+    }
+
+    private static func looksLikeMalformedNumericIPv4(_ host: String) -> Bool {
+        guard host.contains(".") else { return false }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         return parts.allSatisfy { part in
             !part.isEmpty && part.allSatisfy(\.isNumber)
         }

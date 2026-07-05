@@ -59,6 +59,21 @@ enum HeadTrackingStatus: String, Equatable {
 }
 
 enum HeadTrackingSafety {
+    static func canConfigureSender(settings: AppSettings, hasCentered: Bool) -> Bool {
+        AppSettingsValidator.validate(settings).isValid
+            && settings.trackingEnabled
+            && hasCentered
+    }
+
+    static func canSend(
+        settings: AppSettings,
+        status: HeadTrackingStatus,
+        hasCentered: Bool
+    ) -> Bool {
+        canConfigureSender(settings: settings, hasCentered: hasCentered)
+            && canSend(status: status)
+    }
+
     static func status(
         trackingEnabled: Bool,
         hasCentered: Bool,
