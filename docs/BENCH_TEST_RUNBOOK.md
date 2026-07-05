@@ -12,6 +12,7 @@ Use one script per purpose:
 - `scripts/receive_head_tracking.py`: receive iPhone head-tracking UDP JSON intent packets.
 - `scripts/send_fake_head_tracking.py`: fake an iPhone by sending head-tracking JSON to the bridge harness.
 - `scripts/iphone_companion_bridge.py`: log-only Windows ground-station bridge harness.
+- `scripts/reference_iphone_bridge.py`: standalone no-hardware reference bridge for simulator/protocol testing.
 - `scripts/send_synthetic_rtp.py`: send synthetic RTP/H.265-like packets to the APFPV diagnostic receiver.
 - `scripts/dev_check.sh`: run Python syntax checks and the Xcode test suite.
 
@@ -31,6 +32,7 @@ python3 scripts/send_demo_telemetry.py --host 127.0.0.1 --port 5601 --malformed
 python3 scripts/receive_head_tracking.py --port 5602 --timeout-ms 300 --print-rate
 
 python3 scripts/iphone_companion_bridge.py --iphone-host 127.0.0.1 --duration 15
+python3 scripts/reference_iphone_bridge.py --iphone-host 127.0.0.1 --duration 15
 python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --duration 5 --pattern sine
 python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --duration 5 --uncentered
 python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --malformed
@@ -136,6 +138,44 @@ python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --durati
 ```
 
 Expected result: the bridge logs packet rate, age, yaw/pitch/roll, enabled/centered state, validation errors, and stale state if packets stop.
+
+## Standalone Reference Bridge
+
+Use this when you want one small script that mimics the future Windows companion bridge without depending on the Windows repo:
+
+```sh
+python3 scripts/reference_iphone_bridge.py \
+  --iphone-host 127.0.0.1 \
+  --telemetry-port 5601 \
+  --headtracking-port 5602 \
+  --telemetry-rate 20 \
+  --profile normal \
+  --duration 30
+```
+
+In another terminal, fake iPhone head tracking:
+
+```sh
+python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --duration 5 --pattern sine
+```
+
+Expected result:
+
+- The reference bridge prints `LOG-ONLY / NO HARDWARE CONTROL`.
+- Telemetry snapshots are sent to the iOS app or Simulator.
+- Head-tracking packets are validated and logged with sequence, age, rate, yaw, pitch, roll, `tracking_enabled`, `centered`, and state.
+- Malformed packets are rejected without updating the last valid state.
+- If packets stop, state becomes `STALE` after about `300 ms`.
+
+Telemetry profiles:
+
+```sh
+python3 scripts/reference_iphone_bridge.py --iphone-host 127.0.0.1 --profile normal --duration 10
+python3 scripts/reference_iphone_bridge.py --iphone-host 127.0.0.1 --profile noisy --duration 10
+python3 scripts/reference_iphone_bridge.py --iphone-host 127.0.0.1 --profile lost --duration 8
+```
+
+The `lost` profile sends telemetry briefly, then stops so the iOS HUD can show stale/lost telemetry behavior.
 
 ## Windows Bridge Log-Only Test
 

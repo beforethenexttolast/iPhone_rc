@@ -11,6 +11,7 @@ import argparse
 import importlib.util
 import json
 import math
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -154,6 +155,7 @@ def load_script_module(name: str) -> Any:
     if spec is None or spec.loader is None:
         raise ValidationError(f"could not import {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -163,10 +165,15 @@ def validate_generated_packets() -> None:
     head_schema = load_json(REPO_ROOT / "schemas" / "head_tracking_packet.schema.json")
     telemetry_sender = load_script_module("send_demo_telemetry")
     fake_head_sender = load_script_module("send_fake_head_tracking")
+    reference_bridge = load_script_module("reference_iphone_bridge")
 
     telemetry_packet = telemetry_sender.make_packet(time.monotonic(), 1, "normal")
     validate_value(telemetry_packet, telemetry_schema)
     print("ok scripts/send_demo_telemetry.py generated packet")
+
+    reference_packet = reference_bridge.telemetry_packet(time.monotonic(), 1, "normal")
+    validate_value(reference_packet, telemetry_schema)
+    print("ok scripts/reference_iphone_bridge.py generated telemetry packet")
 
     head_packet = fake_head_sender.make_packet(
         seq=1,
