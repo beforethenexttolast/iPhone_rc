@@ -54,7 +54,7 @@ Then select an iPhone simulator and run the `FPVHUDApp` scheme.
 From a terminal with full Xcode selected, the simulator build command is:
 
 ```sh
-xcodebuild -project FPVHUDApp.xcodeproj -scheme FPVHUDApp -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project FPVHUDApp.xcodeproj -scheme FPVHUDApp -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
 If `xcodebuild` reports that Command Line Tools are selected, switch to full Xcode first:
@@ -62,6 +62,103 @@ If `xcodebuild` reports that Command Line Tools are selected, switch to full Xco
 ```sh
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 ```
+
+## Real iPhone First Test
+
+The app is prepared as a landscape-only iPhone target for first device testing. `Info.plist` declares Landscape Left and Landscape Right for iPhone, includes local network usage text for UDP telemetry/head-tracking traffic, and includes motion usage text for Core Motion head tracking.
+
+### Install From Xcode
+
+1. Connect the iPhone over USB, or pair it for wireless development in Xcode.
+2. Open `FPVHUDApp.xcodeproj`.
+3. Select the `FPVHUDApp` scheme and choose the real iPhone as the run destination.
+4. In Signing & Capabilities, select your Apple Development team. If Xcode requires it, change the bundle identifier from `com.example.FPVHUDApp` to a unique value.
+5. Build and run from Xcode. If iOS asks you to trust the developer app, follow the on-device prompt.
+
+### Enable Developer Mode
+
+On iOS 16 or newer, enable Developer Mode before or during the first Xcode install:
+
+1. Open Settings on the iPhone.
+2. Go to Privacy & Security -> Developer Mode.
+3. Turn Developer Mode on, restart, and confirm after reboot.
+
+If Developer Mode is not visible, try running the app from Xcode once with the phone connected.
+
+### Landscape Test
+
+Hold or mount the phone in landscape before testing. The current product target is FPV driving and possible phone-based VR goggles, so portrait does not provide a full HUD. Test both landscape directions and confirm Drive mode returns to a normal landscape layout after opening and closing Debug or Settings.
+
+### Local Network Test
+
+The first UDP network use may trigger the iOS Local Network permission prompt. Allow it for telemetry receive and head-tracking send tests. If permission is denied accidentally, re-enable it in iOS Settings -> Privacy & Security -> Local Network.
+
+Demo mode does not require network access. Real telemetry mode expects the Windows ground station to normalize CRSF/ELRS telemetry and forward JSON snapshots to the iPhone telemetry port.
+
+### Core Motion Test
+
+The simulator uses mock motion. A real iPhone uses Core Motion.
+
+1. Open Debug / Setup.
+2. Enable head tracking.
+3. Hold the phone in its intended neutral mount position.
+4. Tap Center/Calibrate.
+5. Move the phone and confirm raw and centered yaw/pitch/roll update.
+
+Head-tracking UDP packets must not send until tracking is enabled and the phone has been centered/calibrated. Calibration is intentionally not persisted across launches.
+
+### UDP Telemetry Receiver Test
+
+Disable demo mode, then send a normalized JSON snapshot to the iPhone IP and telemetry port, default `5601`:
+
+```python
+import json
+import socket
+import time
+
+IPHONE_IP = "192.168.1.50"
+PORT = 5601
+
+packet = {
+    "timestamp_ms": int(time.time() * 1000),
+    "battery_v": 14.8,
+    "link_quality": 92,
+    "rssi_dbm": -62,
+    "snr_db": 18,
+    "speed_kmh": 12.4,
+    "gear": 3,
+    "drive_mode": "GEARBOX_ERS",
+    "ers_percent": 55,
+    "throttle": 0.43,
+    "brake": 0.0,
+    "steering": -0.15,
+    "camera_yaw_deg": -12.0,
+    "camera_pitch_deg": 5.0,
+    "head_tracking_mode": "OFF",
+    "video_lock": True,
+    "warning": ""
+}
+
+socket.socket(socket.AF_INET, socket.SOCK_DGRAM).sendto(
+    json.dumps(packet).encode("utf-8"),
+    (IPHONE_IP, PORT)
+)
+```
+
+Confirm the HUD shows live values and Debug / Setup shows recent packet age. Stop sending packets and confirm the HUD transitions through stale and lost telemetry states instead of presenting old values as live.
+
+### UDP Head-Tracking Sender Test
+
+Run the Python UDP receiver from the `Head Tracking UDP Intent` section on the Windows ground-station machine or another computer on the same LAN. Set the app's Windows host and head-tracking port to that machine, enable tracking, center/calibrate, then confirm JSON packets arrive.
+
+Safety reminders for first bench tests:
+
+- Demo mode may default on.
+- Tracking defaults off.
+- Sending is blocked until tracking is enabled and centered/calibrated.
+- The app sends camera-look intent only to Windows.
+- The iPhone app does not directly command servos, pan/tilt channels, or the car.
+- The APFPV RTP/H.265 receiver is still stubbed and does not auto-start.
 
 ## Implemented
 
@@ -228,13 +325,20 @@ The simulator uses `MockMotionService`; a real iPhone uses `CoreMotionService`.
 8. Enable `Head tracking input to Windows`.
 
 The debug panel shows raw yaw/pitch/roll, centered yaw/pitch/roll, and stored center offsets.
-The HUD indicator reports:
+Drive mode uses compact head-tracking labels:
 
-- `HEAD TRACK OFF`: no usable motion yet and tracking output disabled.
-- `HEAD TRACK READY - NOT CENTERED`: motion is fresh and tracking is enabled, but center/calibrate has not been performed, so no packets are sent.
-- `HEAD TRACK ACTIVE`: motion is fresh and yaw/pitch/roll intent packets are being sent to Windows.
-- `HEAD TRACK STALE`: the latest motion sample is older than about `0.5s`.
-- `HEAD TRACK ERROR`: no motion sample has arrived for about `2s`.
+- `HEAD OFF`: tracking output is disabled.
+- `HEAD NOT CENTERED`: tracking is enabled, but center/calibrate has not been performed, so no packets are sent.
+- `HEAD ACTIVE`: motion is fresh and yaw/pitch/roll intent packets are being sent to Windows.
+- `HEAD STALE`: the latest motion sample is stale.
+
+Debug / Setup may show more verbose sender wording:
+
+- `HEAD TX OFF`
+- `HEAD TX READY - NOT CENTERED`
+- `HEAD TX ACTIVE`
+- `HEAD TX STALE`
+- `HEAD TX ERROR`
 
 These packets are still only intent packets to Windows. The iPhone app does not send CRSF and does not directly command the car or gimbal.
 
