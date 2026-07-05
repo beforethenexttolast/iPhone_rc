@@ -2,37 +2,46 @@ import SwiftUI
 
 struct RootView: View {
     @ObservedObject var viewModel: FPVHUDViewModel
+    @State private var presentationMode: HUDPresentationMode = .drive
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            FPVHUDView(
-                telemetry: viewModel.telemetry,
-                motion: viewModel.motion,
-                settings: viewModel.settings,
-                headTrackingDisplay: viewModel.headTrackingDisplay
-            )
-
-            Button {
-                viewModel.isSettingsPresented = true
-            } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 18, weight: .bold))
-                    .frame(width: 44, height: 44)
+        ZStack {
+            switch presentationMode {
+            case .drive:
+                FPVHUDView(
+                    telemetry: viewModel.telemetryDisplay,
+                    motion: viewModel.motion,
+                    settings: viewModel.settings,
+                    headTrackingDisplay: viewModel.headTrackingDisplay,
+                    onOpenDebug: {
+                        presentationMode = .debug
+                    }
+                )
+            case .debug:
+                DebugHUDView(
+                    viewModel: viewModel,
+                    onOpenSettings: {
+                        viewModel.isSettingsPresented = true
+                    },
+                    onExit: {
+                        presentationMode = .drive
+                    }
+                )
             }
-            .buttonStyle(HUDIconButtonStyle())
-            .padding(.top, 74)
-            .padding(.trailing, 16)
-            .accessibilityLabel("Settings")
         }
         .fpvStatusBarHidden()
         .onAppear {
             viewModel.startServicesIfNeeded()
         }
-        .sheet(isPresented: $viewModel.isSettingsPresented) {
+        .fullScreenCover(isPresented: $viewModel.isSettingsPresented) {
             SettingsPanelView(viewModel: viewModel)
-                .presentationDetents([.medium, .large])
         }
     }
+}
+
+private enum HUDPresentationMode: Equatable {
+    case drive
+    case debug
 }
 
 private extension View {

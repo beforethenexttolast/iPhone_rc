@@ -28,13 +28,13 @@ struct VideoSurface: View {
 
             VStack(spacing: 6) {
                 Text("NO VIDEO")
-                    .font(.system(size: 30, weight: .black, design: .rounded))
-                    .tracking(8)
-                    .foregroundStyle(.white.opacity(0.18))
+                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .tracking(5)
+                    .foregroundStyle(.white.opacity(0.1))
                 Text("APFPV RTP / H.265 PIPELINE STUBBED")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .tracking(2)
-                    .foregroundStyle(.white.opacity(0.16))
+                    .foregroundStyle(.white.opacity(0.1))
             }
         }
         .ignoresSafeArea()
@@ -56,4 +56,3 @@ private struct ScanlineTexture: View {
         }
     }
 }
-

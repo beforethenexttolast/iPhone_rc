@@ -144,6 +144,14 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertFalse(HeadTrackingSafety.canSend(status: afterReset))
     }
 
+    func testHeadTrackingDriveLabelsStayCompact() {
+        XCTAssertEqual(HeadTrackingStatus.off.driveDisplayName, "HEAD OFF")
+        XCTAssertEqual(HeadTrackingStatus.readyNotCentered.driveDisplayName, "HEAD NOT CENTERED")
+        XCTAssertEqual(HeadTrackingStatus.active.driveDisplayName, "HEAD ACTIVE")
+        XCTAssertEqual(HeadTrackingStatus.stale.driveDisplayName, "HEAD STALE")
+        XCTAssertEqual(HeadTrackingStatus.error.driveDisplayName, "HEAD STALE")
+    }
+
     func testTelemetryFreshnessThresholds() {
         XCTAssertEqual(TelemetryFreshness.evaluate(age: 0.25), .live)
         XCTAssertEqual(TelemetryFreshness.evaluate(age: 1.01), .staleWarning)
@@ -339,6 +347,223 @@ final class TelemetryParsingTests: XCTestCase {
 
         XCTAssertEqual(state.panTiltMode, .headTracking)
         XCTAssertEqual(state.driveMode, .gearbox)
+    }
+
+    func testTelemetryDisplayShowsFreshValues() {
+        let now = Date()
+        let state = makeLiveTelemetry(timestamp: now.addingTimeInterval(-0.2))
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: state,
+            receiverStatus: makeTelemetryStatus(age: 0.2, now: now),
+            settings: realTelemetrySettings(),
+            now: now
+        )
+
+        XCTAssertEqual(display.freshness, .live)
+        XCTAssertTrue(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "14.8 V")
+        XCTAssertEqual(display.linkQualityText, "92%")
+        XCTAssertEqual(display.rssiText, "-62")
+        XCTAssertEqual(display.snrText, "18")
+        XCTAssertEqual(display.gearText, "G3")
+        XCTAssertEqual(display.driveModeText, "ERS")
+        XCTAssertEqual(display.ersText, "55%")
+        XCTAssertEqual(display.speedText, "12 km/h")
+        XCTAssertNil(display.warningText)
+    }
+
+    func testTelemetryDisplayShowsStaleWarningAfterOneSecond() {
+        let now = Date()
+        let state = makeLiveTelemetry(timestamp: now.addingTimeInterval(-1.4))
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: state,
+            receiverStatus: makeTelemetryStatus(age: 1.4, now: now),
+            settings: realTelemetrySettings(),
+            now: now
+        )
+
+        XCTAssertEqual(display.freshness, .staleWarning)
+        XCTAssertTrue(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "14.8 V")
+        XCTAssertEqual(display.gearText, "G3")
+        XCTAssertEqual(display.warningText, "TELEMETRY STALE >1S")
+        XCTAssertTrue(display.staleDataWarnings.contains(.telemetry))
+    }
+
+    func testTelemetryDisplayClearsValuesAfterDataLost() {
+        let now = Date()
+        let state = makeLiveTelemetry(timestamp: now.addingTimeInterval(-3.4))
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: state,
+            receiverStatus: makeTelemetryStatus(age: 3.4, now: now),
+            settings: realTelemetrySettings(),
+            now: now
+        )
+
+        XCTAssertEqual(display.freshness, .dataLost)
+        XCTAssertFalse(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "--.- V")
+        XCTAssertEqual(display.linkQualityText, "--")
+        XCTAssertEqual(display.rssiText, "--")
+        XCTAssertEqual(display.snrText, "--")
+        XCTAssertEqual(display.speedText, "-- km/h")
+        XCTAssertEqual(display.gearText, "--")
+        XCTAssertEqual(display.driveModeText, "UNKNOWN")
+        XCTAssertEqual(display.ersText, "--")
+        XCTAssertEqual(display.warningText, "TELEMETRY DATA LOST >3S")
+    }
+
+    func testTelemetryDisplayClearsDemoValuesWhenDemoIsOff() {
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: .demo,
+            receiverStatus: .idle,
+            settings: realTelemetrySettings()
+        )
+
+        XCTAssertFalse(display.showsLiveValues)
+        XCTAssertEqual(display.batteryText, "--.- V")
+        XCTAssertEqual(display.speedText, "-- km/h")
+        XCTAssertEqual(display.gearText, "--")
+        XCTAssertEqual(display.ersText, "--")
+        XCTAssertEqual(display.sourceText, "--")
+        XCTAssertEqual(display.warningText, "WAITING FOR TELEMETRY")
+    }
+
+    func testTelemetryDisplayDoesNotKeepGearOrERSAfterTelemetryLost() {
+        var state = makeLiveTelemetry(timestamp: Date().addingTimeInterval(-4))
+        state.gear = 6
+        state.ersPercent = 99
+
+        let display = TelemetryDisplayState.make(
+            rawTelemetry: state,
+            receiverStatus: makeTelemetryStatus(age: 4, now: Date()),
+            settings: realTelemetrySettings()
+        )
+
+        XCTAssertEqual(display.gearText, "--")
+        XCTAssertEqual(display.ersText, "--")
+        XCTAssertEqual(display.speedValueText, "--")
+    }
+
+    func testSettingsValidatorAcceptsTrimmedIPv4AndHostnames() throws {
+        XCTAssertEqual(AppSettingsValidator.validateHost(" 192.168.4.2 "), "192.168.4.2")
+        XCTAssertEqual(AppSettingsValidator.validateHost("windows-ground.local"), "windows-ground.local")
+        XCTAssertEqual(AppSettingsValidator.validateHost("groundstation"), "groundstation")
+        XCTAssertNil(AppSettingsValidator.validateHost(""))
+        XCTAssertNil(AppSettingsValidator.validateHost("300.168.4.2"))
+        XCTAssertNil(AppSettingsValidator.validateHost("bad_host_name"))
+    }
+
+    func testSettingsValidatorParsesPortsRatesAndTimeoutsSafely() {
+        XCTAssertEqual(AppSettingsValidator.parsePort("5601"), 5601)
+        XCTAssertEqual(AppSettingsValidator.parsePort(" 65535 "), 65535)
+        XCTAssertNil(AppSettingsValidator.parsePort("0"))
+        XCTAssertNil(AppSettingsValidator.parsePort("65536"))
+        XCTAssertNil(AppSettingsValidator.parsePort("-1"))
+        XCTAssertNil(AppSettingsValidator.parsePort("12.5"))
+        XCTAssertNil(AppSettingsValidator.parsePort("abc"))
+
+        XCTAssertEqual(AppSettingsValidator.parseSendRateHz("60"), 60)
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("0"))
+        XCTAssertNil(AppSettingsValidator.parseSendRateHz("61"))
+
+        XCTAssertEqual(AppSettingsValidator.parseTimeoutMs("250"), 250)
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("99"))
+        XCTAssertNil(AppSettingsValidator.parseTimeoutMs("5001"))
+    }
+
+    func testSettingsValidatorRejectsInvalidSettingsAndSanitizesValidSettings() throws {
+        var invalid = AppSettings.defaults
+        invalid.windowsHost = " "
+        invalid.telemetryPort = 0
+        invalid.headTrackingPort = 70000
+        invalid.headTrackingSendHz = 80
+        invalid.headTrackingTimeoutMs = 50
+
+        let invalidResult = AppSettingsValidator.validate(invalid)
+
+        XCTAssertFalse(invalidResult.isValid)
+        XCTAssertNil(invalidResult.sanitizedSettings)
+        XCTAssertFalse(invalidResult.messages(for: .windowsHost).isEmpty)
+        XCTAssertFalse(invalidResult.messages(for: .telemetryPort).isEmpty)
+        XCTAssertFalse(invalidResult.messages(for: .headTrackingPort).isEmpty)
+        XCTAssertFalse(invalidResult.messages(for: .headTrackingSendHz).isEmpty)
+        XCTAssertFalse(invalidResult.messages(for: .headTrackingTimeoutMs).isEmpty)
+
+        var valid = AppSettings.defaults
+        valid.windowsHost = " 10.0.0.5 "
+        valid.demoModeEnabled = false
+
+        let validResult = AppSettingsValidator.validate(valid)
+        let sanitized = try XCTUnwrap(validResult.sanitizedSettings)
+
+        XCTAssertTrue(validResult.isValid)
+        XCTAssertEqual(sanitized.windowsHost, "10.0.0.5")
+        XCTAssertFalse(sanitized.demoModeEnabled)
+    }
+
+    @MainActor
+    func testViewModelDoesNotPersistInvalidSettings() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+        var saved = AppSettings.defaults
+        saved.windowsHost = "10.0.0.9"
+        store.save(saved)
+
+        let viewModel = FPVHUDViewModel(
+            motionService: MockMotionService(),
+            settingsStore: store
+        )
+        var invalid = saved
+        invalid.windowsHost = ""
+        invalid.telemetryPort = 0
+
+        let didApply = viewModel.applySettings(invalid)
+
+        XCTAssertFalse(didApply)
+        XCTAssertEqual(store.load(), saved)
+        XCTAssertEqual(viewModel.settings.windowsHost, saved.windowsHost)
+    }
+
+    private func realTelemetrySettings() -> AppSettings {
+        var settings = AppSettings.defaults
+        settings.demoModeEnabled = false
+        return settings
+    }
+
+    private func makeLiveTelemetry(timestamp: Date) -> TelemetryState {
+        TelemetryState(
+            timestamp: timestamp,
+            batteryVoltage: 14.8,
+            rssiDbm: -62,
+            snrDb: 18,
+            linkQualityPercent: 92,
+            speedKmh: 12.4,
+            gear: 3,
+            driveMode: .gearboxERS,
+            ersPercent: 55,
+            throttle: 0.43,
+            brake: 0,
+            steering: -0.15,
+            cameraYawDeg: -12,
+            cameraPitchDeg: 5,
+            panTiltMode: .disabled,
+            videoLock: true,
+            linkState: .connected,
+            mode: .udp,
+            warningText: nil,
+            staleDataWarnings: []
+        )
+    }
+
+    private func makeTelemetryStatus(age: TimeInterval, now: Date) -> TelemetryReceiverStatus {
+        TelemetryReceiverStatus(
+            isListening: true,
+            lastPacketReceivedAt: now.addingTimeInterval(-age),
+            lastPacketAge: age,
+            malformedPacketCount: 0,
+            warningText: nil
+        )
     }
 
     private func makeIsolatedDefaults() -> UserDefaults {

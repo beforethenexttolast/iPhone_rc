@@ -3,8 +3,10 @@ import Foundation
 @MainActor
 final class FPVHUDViewModel: ObservableObject {
     @Published var telemetry: TelemetryState = .demo
+    @Published var telemetryDisplay: TelemetryDisplayState = .unknown
     @Published var motion: MotionState = .zero
     @Published var settings = AppSettings()
+    @Published var settingsValidation = AppSettingsValidator.validate(.defaults)
     @Published var telemetryStatus: TelemetryReceiverStatus = .idle
     @Published var headTrackingDisplay = HeadTrackingDisplayState.idle
     @Published var isSettingsPresented = false
@@ -25,6 +27,7 @@ final class FPVHUDViewModel: ObservableObject {
     private var headTrackingSendTimer: DispatchSourceTimer?
     private let motionStatusQueue = DispatchQueue(label: "fpvhud.motion.status.timer")
     private let headTrackingSendQueue = DispatchQueue(label: "fpvhud.headtracking.send.timer")
+    private var lastRawTelemetry: TelemetryState?
     private var hasCenteredTracking = false
     private var servicesStarted = false
 
@@ -34,8 +37,12 @@ final class FPVHUDViewModel: ObservableObject {
     ) {
         self.motionService = motionService
         self.settingsStore = settingsStore
-        self.settings = settingsStore.load()
+        let loadedSettings = settingsStore.load()
+        let loadedValidation = AppSettingsValidator.validate(loadedSettings)
+        self.settings = loadedValidation.sanitizedSettings ?? .defaults
+        self.settingsValidation = AppSettingsValidator.validate(self.settings)
         bindServices()
+        refreshTelemetryDisplay()
     }
 
     func startServicesIfNeeded() {
@@ -44,29 +51,45 @@ final class FPVHUDViewModel: ObservableObject {
         applyRuntimeSettings()
     }
 
-    func applySettings() {
-        settingsStore.save(settings)
+    @discardableResult
+    func applySettings(_ proposedSettings: AppSettings? = nil) -> Bool {
+        let candidate = proposedSettings ?? settings
+        let validation = AppSettingsValidator.validate(candidate)
+        settingsValidation = validation
+        guard let sanitizedSettings = validation.sanitizedSettings else {
+            return false
+        }
+
+        settings = sanitizedSettings
+        settingsStore.save(sanitizedSettings)
+        clearRawTelemetryForModeChangeIfNeeded()
+        refreshTelemetryDisplay()
+
         guard servicesStarted else {
             updateMotionState()
-            return
+            return true
         }
 
         applyRuntimeSettings()
+        return true
     }
 
     private func applyRuntimeSettings() {
-        headTrackingSender.configure(
-            host: settings.windowsHost,
-            port: UInt16(clamping: settings.headTrackingPort)
-        )
+        updateHeadTrackingSenderConfiguration()
         startHeadTrackingSendTimer()
 
         if settings.demoModeEnabled {
             udpTelemetry.stop()
             telemetryStatus = .idle
+            lastRawTelemetry = nil
+            refreshTelemetryDisplay()
             demoTelemetry.start(settings: settings)
         } else {
             demoTelemetry.stop()
+            if lastRawTelemetry?.mode == .demo {
+                lastRawTelemetry = nil
+            }
+            refreshTelemetryDisplay()
             udpTelemetry.start(settings: settings)
         }
 
@@ -75,10 +98,12 @@ final class FPVHUDViewModel: ObservableObject {
         updateMotionState()
     }
 
-    func resetSettingsToDefaults() {
+    @discardableResult
+    func resetSettingsToDefaults() -> AppSettings {
         settings = settingsStore.reset()
         resetTrackingCalibration()
         applySettings()
+        return settings
     }
 
     func centerTracking() {
@@ -87,6 +112,9 @@ final class FPVHUDViewModel: ObservableObject {
         centerRollDeg = rawRollDeg
         hasCenteredTracking = true
         updateMotionState()
+        if servicesStarted {
+            updateHeadTrackingSenderConfiguration()
+        }
     }
 
     func resetTrackingCalibration() {
@@ -95,12 +123,16 @@ final class FPVHUDViewModel: ObservableObject {
         centerRollDeg = 0
         hasCenteredTracking = false
         updateMotionState()
+        headTrackingSender.stop()
     }
 
     func stopNetworking() {
         demoTelemetry.stop()
         udpTelemetry.stop()
         headTrackingSender.stop()
+        lastRawTelemetry = nil
+        telemetryStatus = .idle
+        refreshTelemetryDisplay()
         motionStatusTimer?.cancel()
         motionStatusTimer = nil
         headTrackingSendTimer?.cancel()
@@ -111,19 +143,19 @@ final class FPVHUDViewModel: ObservableObject {
     private func bindServices() {
         demoTelemetry.onTelemetry = { [weak self] state in
             Task { @MainActor in
-                self?.telemetry = state
+                self?.receiveTelemetry(state)
             }
         }
 
         udpTelemetry.onTelemetry = { [weak self] state in
             Task { @MainActor in
-                self?.telemetry = state
+                self?.receiveTelemetry(state)
             }
         }
 
         udpTelemetry.onStatus = { [weak self] status in
             Task { @MainActor in
-                self?.telemetryStatus = status
+                self?.receiveTelemetryStatus(status)
             }
         }
 
@@ -141,6 +173,45 @@ final class FPVHUDViewModel: ObservableObject {
                 self?.updateMotionState(sampleTimestamp: sample.timestamp)
             }
         }
+    }
+
+    private func receiveTelemetry(_ state: TelemetryState) {
+        lastRawTelemetry = state
+        telemetry = state
+        refreshTelemetryDisplay()
+    }
+
+    private func receiveTelemetryStatus(_ status: TelemetryReceiverStatus) {
+        telemetryStatus = status
+        refreshTelemetryDisplay()
+    }
+
+    private func refreshTelemetryDisplay() {
+        telemetryDisplay = TelemetryDisplayState.make(
+            rawTelemetry: lastRawTelemetry,
+            receiverStatus: telemetryStatus,
+            settings: settings
+        )
+    }
+
+    private func clearRawTelemetryForModeChangeIfNeeded() {
+        if settings.demoModeEnabled {
+            lastRawTelemetry = nil
+        } else if lastRawTelemetry?.mode == .demo {
+            lastRawTelemetry = nil
+        }
+    }
+
+    private func updateHeadTrackingSenderConfiguration() {
+        guard settings.trackingEnabled, hasCenteredTracking else {
+            headTrackingSender.stop()
+            return
+        }
+
+        headTrackingSender.configure(
+            host: settings.windowsHost,
+            port: UInt16(clamping: settings.headTrackingPort)
+        )
     }
 
     private func updateMotionState(sampleTimestamp: Date? = nil) {

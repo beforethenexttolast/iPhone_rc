@@ -39,11 +39,21 @@ enum HeadTrackingStatus: String, Equatable {
 
     var displayName: String {
         switch self {
-        case .off: return "HEAD TRACK OFF"
-        case .readyNotCentered: return "HEAD TRACK READY - NOT CENTERED"
-        case .active: return "HEAD TRACK ACTIVE"
-        case .stale: return "HEAD TRACK STALE"
-        case .error: return "HEAD TRACK ERROR"
+        case .off: return "HEAD TX OFF"
+        case .readyNotCentered: return "HEAD TX READY - NOT CENTERED"
+        case .active: return "HEAD TX ACTIVE"
+        case .stale: return "HEAD TX STALE"
+        case .error: return "HEAD TX ERROR"
+        }
+    }
+
+    var driveDisplayName: String {
+        switch self {
+        case .off: return "HEAD OFF"
+        case .readyNotCentered: return "HEAD NOT CENTERED"
+        case .active: return "HEAD ACTIVE"
+        case .stale: return "HEAD STALE"
+        case .error: return "HEAD STALE"
         }
     }
 }

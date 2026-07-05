@@ -13,6 +13,175 @@ struct AppSettings: Codable, Equatable {
     static let defaults = AppSettings()
 }
 
+enum AppSettingsField: String, CaseIterable {
+    case windowsHost
+    case telemetryPort
+    case headTrackingPort
+    case motionUpdateHz
+    case headTrackingSendHz
+    case headTrackingTimeoutMs
+
+    var displayName: String {
+        switch self {
+        case .windowsHost: return "Windows host"
+        case .telemetryPort: return "Telemetry UDP port"
+        case .headTrackingPort: return "Head tracking UDP port"
+        case .motionUpdateHz: return "Motion rate"
+        case .headTrackingSendHz: return "Head send rate"
+        case .headTrackingTimeoutMs: return "Head timeout"
+        }
+    }
+}
+
+struct AppSettingsValidationIssue: Equatable, Identifiable {
+    var field: AppSettingsField
+    var message: String
+
+    var id: String {
+        "\(field.rawValue):\(message)"
+    }
+}
+
+struct AppSettingsValidationResult: Equatable {
+    var sanitizedSettings: AppSettings?
+    var issues: [AppSettingsValidationIssue]
+
+    var isValid: Bool {
+        sanitizedSettings != nil && issues.isEmpty
+    }
+
+    func messages(for field: AppSettingsField) -> [AppSettingsValidationIssue] {
+        issues.filter { $0.field == field }
+    }
+}
+
+enum AppSettingsValidator {
+    static let portRange = 1...65535
+    static let motionRateRange = 1...120
+    static let sendRateRange = 1...60
+    static let timeoutMsRange = 100...5000
+
+    static func validate(_ settings: AppSettings) -> AppSettingsValidationResult {
+        var sanitized = settings
+        var issues: [AppSettingsValidationIssue] = []
+
+        if let host = validateHost(settings.windowsHost) {
+            sanitized.windowsHost = host
+        } else {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .windowsHost,
+                    message: "Enter a valid IPv4 address or hostname."
+                )
+            )
+        }
+
+        if !portRange.contains(settings.telemetryPort) {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .telemetryPort,
+                    message: "Port must be an integer from 1 to 65535."
+                )
+            )
+        }
+
+        if !portRange.contains(settings.headTrackingPort) {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .headTrackingPort,
+                    message: "Port must be an integer from 1 to 65535."
+                )
+            )
+        }
+
+        if !motionRateRange.contains(settings.motionUpdateHz) {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .motionUpdateHz,
+                    message: "Motion rate must be from 1 to 120 Hz."
+                )
+            )
+        }
+
+        if !sendRateRange.contains(settings.headTrackingSendHz) {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .headTrackingSendHz,
+                    message: "Head send rate must be from 1 to 60 Hz."
+                )
+            )
+        }
+
+        if !timeoutMsRange.contains(settings.headTrackingTimeoutMs) {
+            issues.append(
+                AppSettingsValidationIssue(
+                    field: .headTrackingTimeoutMs,
+                    message: "Timeout must be from 100 to 5000 ms."
+                )
+            )
+        }
+
+        return AppSettingsValidationResult(
+            sanitizedSettings: issues.isEmpty ? sanitized : nil,
+            issues: issues
+        )
+    }
+
+    static func validateHost(_ host: String) -> String? {
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if looksLikeIPv4(trimmed) {
+            return isValidIPv4(trimmed) ? trimmed : nil
+        }
+        guard isValidIPv4(trimmed) || isValidHostname(trimmed) else { return nil }
+        return trimmed
+    }
+
+    static func parsePort(_ text: String) -> Int? {
+        parseInteger(text, in: portRange)
+    }
+
+    static func parseSendRateHz(_ text: String) -> Int? {
+        parseInteger(text, in: sendRateRange)
+    }
+
+    static func parseTimeoutMs(_ text: String) -> Int? {
+        parseInteger(text, in: timeoutMsRange)
+    }
+
+    private static func parseInteger(_ text: String, in range: ClosedRange<Int>) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.range(of: #"^\d+$"#, options: .regularExpression) != nil else { return nil }
+        guard let value = Int(trimmed), range.contains(value) else { return nil }
+        return value
+    }
+
+    private static func isValidIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+
+        return parts.allSatisfy { part in
+            guard !part.isEmpty else { return false }
+            guard part.allSatisfy(\.isNumber) else { return false }
+            guard let value = Int(part), (0...255).contains(value) else { return false }
+            return true
+        }
+    }
+
+    private static func looksLikeIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        return parts.allSatisfy { part in
+            !part.isEmpty && part.allSatisfy(\.isNumber)
+        }
+    }
+
+    private static func isValidHostname(_ host: String) -> Bool {
+        let pattern = #"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"#
+        return host.range(of: pattern, options: .regularExpression) != nil
+    }
+}
+
 enum HeadTrackingTiming {
     static func clampedSendRateHz(_ rate: Int) -> Int {
         min(max(rate, 30), 60)

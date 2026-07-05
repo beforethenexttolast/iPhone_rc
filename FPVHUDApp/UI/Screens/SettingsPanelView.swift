@@ -3,79 +3,79 @@ import SwiftUI
 struct SettingsPanelView: View {
     @ObservedObject var viewModel: FPVHUDViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var draftSettings: AppSettings
 
-    private let portRange = 1...65535
+    init(viewModel: FPVHUDViewModel) {
+        self.viewModel = viewModel
+        _draftSettings = State(initialValue: viewModel.settings)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Windows ground station") {
-                    TextField("Host IP", text: $viewModel.settings.windowsHost)
+                    TextField("Host IP", text: $draftSettings.windowsHost)
                         .fpvHostTextInput()
 
-                    Stepper(
-                        "Telemetry UDP: \(viewModel.settings.telemetryPort)",
-                        value: $viewModel.settings.telemetryPort,
-                        in: portRange
-                    )
+                    SettingsValidationMessages(messages: validation.messages(for: .windowsHost))
 
                     Stepper(
-                        "Head tracking UDP: \(viewModel.settings.headTrackingPort)",
-                        value: $viewModel.settings.headTrackingPort,
-                        in: portRange
+                        "Telemetry UDP: \(draftSettings.telemetryPort)",
+                        value: $draftSettings.telemetryPort,
+                        in: AppSettingsValidator.portRange
                     )
+                    SettingsValidationMessages(messages: validation.messages(for: .telemetryPort))
+
+                    Stepper(
+                        "Head tracking UDP: \(draftSettings.headTrackingPort)",
+                        value: $draftSettings.headTrackingPort,
+                        in: AppSettingsValidator.portRange
+                    )
+                    SettingsValidationMessages(messages: validation.messages(for: .headTrackingPort))
                 }
 
                 Section("Modes") {
-                    Toggle("Demo telemetry", isOn: $viewModel.settings.demoModeEnabled)
-                    Toggle("Head tracking input to Windows", isOn: $viewModel.settings.trackingEnabled)
+                    Toggle("Demo telemetry", isOn: $draftSettings.demoModeEnabled)
+                    Toggle("Head tracking input to Windows", isOn: $draftSettings.trackingEnabled)
                     Stepper(
-                        "Motion rate: \(viewModel.settings.motionUpdateHz) Hz",
-                        value: $viewModel.settings.motionUpdateHz,
+                        "Motion rate: \(draftSettings.motionUpdateHz) Hz",
+                        value: $draftSettings.motionUpdateHz,
                         in: 15...120,
                         step: 5
                     )
+                    SettingsValidationMessages(messages: validation.messages(for: .motionUpdateHz))
                     Stepper(
-                        "Head send rate: \(viewModel.settings.headTrackingSendHz) Hz",
-                        value: $viewModel.settings.headTrackingSendHz,
+                        "Head send rate: \(draftSettings.headTrackingSendHz) Hz",
+                        value: $draftSettings.headTrackingSendHz,
                         in: 30...60,
                         step: 5
                     )
+                    SettingsValidationMessages(messages: validation.messages(for: .headTrackingSendHz))
                     Stepper(
-                        "Head timeout: \(viewModel.settings.headTrackingTimeoutMs) ms",
-                        value: $viewModel.settings.headTrackingTimeoutMs,
-                        in: 100...1000,
+                        "Head timeout: \(draftSettings.headTrackingTimeoutMs) ms",
+                        value: $draftSettings.headTrackingTimeoutMs,
+                        in: AppSettingsValidator.timeoutMsRange,
                         step: 50
                     )
+                    SettingsValidationMessages(messages: validation.messages(for: .headTrackingTimeoutMs))
 
                     Button(role: .destructive) {
-                        viewModel.resetSettingsToDefaults()
+                        draftSettings = viewModel.resetSettingsToDefaults()
                     } label: {
                         Label("Reset settings to defaults", systemImage: "arrow.counterclockwise")
                     }
                 }
 
                 Section("Telemetry receiver") {
-                    HStack {
-                        Text("UDP listener")
-                        Spacer()
-                        Text(receiverStateText)
-                            .foregroundStyle(viewModel.telemetryStatus.isListening ? .green : .secondary)
-                    }
+                    SettingsValueRow(
+                        title: "UDP listener",
+                        value: receiverStateText,
+                        tint: viewModel.telemetryStatus.isListening ? .green : .secondary
+                    )
 
-                    HStack {
-                        Text("Last packet age")
-                        Spacer()
-                        Text(lastPacketAgeText)
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Last packet age", value: lastPacketAgeText)
 
-                    HStack {
-                        Text("Malformed packets")
-                        Spacer()
-                        Text("\(viewModel.telemetryStatus.malformedPacketCount)")
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Malformed packets", value: "\(viewModel.telemetryStatus.malformedPacketCount)")
 
                     if let warning = viewModel.telemetryStatus.warningText {
                         Text(warning)
@@ -84,130 +84,72 @@ struct SettingsPanelView: View {
                 }
 
                 Section("Tracking") {
-                    Button {
-                        viewModel.centerTracking()
-                    } label: {
-                        Label("Center / calibrate", systemImage: "scope")
-                    }
+                    SettingsTrackingActions(
+                        onCenter: {
+                            viewModel.centerTracking()
+                        },
+                        onReset: {
+                            viewModel.resetTrackingCalibration()
+                        }
+                    )
 
-                    Button(role: .destructive) {
-                        viewModel.resetTrackingCalibration()
-                    } label: {
-                        Label("Reset calibration", systemImage: "xmark.circle")
-                    }
+                    SettingsValueRow(title: "State", value: viewModel.motion.status.displayName)
 
-                    HStack {
-                        Text("State")
-                        Spacer()
-                        Text(viewModel.motion.status.displayName)
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(
+                        title: "UDP configured",
+                        value: viewModel.headTrackingDisplay.udpConfiguredText,
+                        tint: viewModel.headTrackingDisplay.isUDPConfigured ? .green : .secondary
+                    )
 
-                    HStack {
-                        Text("UDP configured")
-                        Spacer()
-                        Text(viewModel.headTrackingDisplay.udpConfiguredText)
-                            .foregroundStyle(viewModel.headTrackingDisplay.isUDPConfigured ? .green : .secondary)
-                    }
+                    SettingsValueRow(title: "Packet rate", value: viewModel.headTrackingDisplay.packetRateText)
 
-                    HStack {
-                        Text("Packet rate")
-                        Spacer()
-                        Text(viewModel.headTrackingDisplay.packetRateText)
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Packets sent", value: viewModel.headTrackingDisplay.packetsSentText)
 
-                    HStack {
-                        Text("Packets sent")
-                        Spacer()
-                        Text(viewModel.headTrackingDisplay.packetsSentText)
-                            .monospacedDigit()
-                    }
-
-                    HStack {
-                        Text("Last send")
-                        Spacer()
-                        Text(viewModel.headTrackingDisplay.lastSendText)
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Last send", value: viewModel.headTrackingDisplay.lastSendText)
 
                     if let error = viewModel.headTrackingDisplay.warningText {
                         Text(error)
                             .foregroundStyle(.orange)
                     }
 
-                    HStack {
-                        Text("Raw yaw")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.rawYawDeg))
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Raw pitch")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.rawPitchDeg))
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Raw roll")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.rawRollDeg))
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Raw yaw", value: HUDFormatters.signedDegrees(viewModel.motion.rawYawDeg))
+                    SettingsValueRow(title: "Raw pitch", value: HUDFormatters.signedDegrees(viewModel.motion.rawPitchDeg))
+                    SettingsValueRow(title: "Raw roll", value: HUDFormatters.signedDegrees(viewModel.motion.rawRollDeg))
 
-                    HStack {
-                        Text("Centered yaw")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.yawDeg))
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Centered pitch")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.pitchDeg))
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Centered roll")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.rollDeg))
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Centered yaw", value: HUDFormatters.signedDegrees(viewModel.motion.yawDeg))
+                    SettingsValueRow(title: "Centered pitch", value: HUDFormatters.signedDegrees(viewModel.motion.pitchDeg))
+                    SettingsValueRow(title: "Centered roll", value: HUDFormatters.signedDegrees(viewModel.motion.rollDeg))
 
-                    HStack {
-                        Text("Center yaw")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterYaw))
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Center pitch")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterPitch))
-                            .monospacedDigit()
-                    }
-                    HStack {
-                        Text("Center roll")
-                        Spacer()
-                        Text(HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterRoll))
-                            .monospacedDigit()
-                    }
+                    SettingsValueRow(title: "Center yaw", value: HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterYaw))
+                    SettingsValueRow(title: "Center pitch", value: HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterPitch))
+                    SettingsValueRow(title: "Center roll", value: HUDFormatters.signedDegrees(viewModel.motion.calibratedCenterRoll))
                 }
             }
             .navigationTitle("FPV HUD Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
-                        viewModel.applySettings()
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply") {
-                        viewModel.applySettings()
+                        applyDraftSettings()
                     }
+                    .disabled(!validation.isValid)
                 }
             }
+        }
+    }
+
+    private var validation: AppSettingsValidationResult {
+        AppSettingsValidator.validate(draftSettings)
+    }
+
+    private func applyDraftSettings() {
+        if viewModel.applySettings(draftSettings) {
+            draftSettings = viewModel.settings
         }
     }
 
@@ -224,6 +166,89 @@ struct SettingsPanelView: View {
         return String(format: "%.2fs", age)
     }
 
+}
+
+private struct SettingsTrackingActions: View {
+    var onCenter: () -> Void
+    var onReset: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                centerButton
+                resetButton
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                centerButton
+                resetButton
+            }
+        }
+    }
+
+    private var centerButton: some View {
+        Button(action: onCenter) {
+            Label("Center / calibrate", systemImage: "scope")
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private var resetButton: some View {
+        Button(role: .destructive, action: onReset) {
+            Label("Reset calibration", systemImage: "xmark.circle")
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+}
+
+private struct SettingsValueRow: View {
+    var title: String
+    var value: String
+    var tint: Color = .primary
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                Spacer(minLength: 12)
+                valueText
+                    .multilineTextAlignment(.trailing)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                valueText
+                    .multilineTextAlignment(.leading)
+            }
+        }
+    }
+
+    private var valueText: some View {
+        Text(value)
+            .monospacedDigit()
+            .foregroundStyle(tint)
+            .lineLimit(2)
+            .minimumScaleFactor(0.72)
+    }
+}
+
+private struct SettingsValidationMessages: View {
+    var messages: [AppSettingsValidationIssue]
+
+    var body: some View {
+        if !messages.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(messages) { issue in
+                    Text(issue.message)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
 }
 
 private extension View {

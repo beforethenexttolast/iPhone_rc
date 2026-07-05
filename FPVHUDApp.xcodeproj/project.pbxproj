@@ -29,6 +29,8 @@
 		0A0001010000000000000014 /* FutureRTPHEVCReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0002010000000000000014 /* FutureRTPHEVCReceiver.swift */; };
 		0A0001010000000000000015 /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0002010000000000000015 /* Formatters.swift */; };
 		0A0001010000000000000016 /* TelemetryParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0002010000000000000016 /* TelemetryParsingTests.swift */; };
+		0A0001010000000000000017 /* AppIcon60x60@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001A /* AppIcon60x60@2x.png */; };
+		0A0001010000000000000018 /* AppIcon60x60@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001B /* AppIcon60x60@3x.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +68,9 @@
 		0A0002010000000000000016 /* TelemetryParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryParsingTests.swift; sourceTree = "<group>"; };
 		0A0002010000000000000017 /* FPVHUDApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FPVHUDApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A0002010000000000000018 /* FPVHUDAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FPVHUDAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A0002010000000000000019 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0A000201000000000000001A /* AppIcon60x60@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@2x.png"; sourceTree = "<group>"; };
+		0A000201000000000000001B /* AppIcon60x60@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@3x.png"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +104,8 @@
 			isa = PBXGroup;
 			children = (
 				0A0006010000000000000003 /* App */,
+				0A0002010000000000000019 /* Info.plist */,
+				0A0006010000000000000012 /* Resources */,
 				0A0006010000000000000004 /* UI */,
 				0A0006010000000000000008 /* Models */,
 				0A0006010000000000000009 /* Telemetry */,
@@ -219,6 +226,15 @@
 			path = Utilities;
 			sourceTree = "<group>";
 		};
+		0A0006010000000000000012 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0A000201000000000000001A /* AppIcon60x60@2x.png */,
+				0A000201000000000000001B /* AppIcon60x60@3x.png */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		0A0006010000000000000010 /* FPVHUDAppTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -317,6 +333,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0A0001010000000000000017 /* AppIcon60x60@2x.png in Resources */,
+				0A0001010000000000000018 /* AppIcon60x60@3x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -490,17 +508,12 @@
 		0A000B010000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "FPV HUD";
-				INFOPLIST_KEY_NSMotionUsageDescription = "FPV HUD uses device motion to send optional head-tracking input to the Windows ground station.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "FPV HUD receives local telemetry and can send head-tracking packets to the Windows ground station.";
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FPVHUDApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.FPVHUDApp;
@@ -517,17 +530,12 @@
 		0A000B010000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "FPV HUD";
-				INFOPLIST_KEY_NSMotionUsageDescription = "FPV HUD uses device motion to send optional head-tracking input to the Windows ground station.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "FPV HUD receives local telemetry and can send head-tracking packets to the Windows ground station.";
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FPVHUDApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.FPVHUDApp;
@@ -613,4 +621,3 @@
 	};
 	rootObject = 0A0000010000000000000001 /* Project object */;
 }
-
