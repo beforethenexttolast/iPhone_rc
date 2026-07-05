@@ -67,7 +67,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 The app is prepared as a landscape-only iPhone target for first device testing. `Info.plist` declares Landscape Left and Landscape Right for iPhone, includes local network usage text for UDP telemetry/head-tracking traffic, and includes motion usage text for Core Motion head tracking.
 
-No real iPhone is required for the local simulator harness. See `docs/SIMULATOR_TESTING.md` for a Mac-to-Simulator UDP workflow covering telemetry receive, stale/lost behavior, malformed telemetry, settings validation, and mock-motion head-tracking packet gating.
+No real iPhone is required for the local simulator harness. Start with `docs/BENCH_TEST_RUNBOOK.md` for the complete no-hardware and first-bench-test workflow. `docs/SIMULATOR_TESTING.md` remains the focused Mac-to-Simulator UDP workflow covering telemetry receive, stale/lost behavior, malformed telemetry, settings validation, and mock-motion head-tracking packet gating.
 
 ### Install From Xcode
 
@@ -391,11 +391,13 @@ python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --port 5602 --durati
 To test malformed packet rejection:
 
 ```sh
-python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --malformed
-python3 scripts/fake_iphone_head_tracking_sender.py --host 127.0.0.1 --malformed-every 10 --duration 3
+python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --malformed
+python3 scripts/send_fake_head_tracking.py --host 127.0.0.1 --malformed-every 10 --duration 3
 ```
 
-Neither fake sender connects to vehicle hardware. The Windows bridge remains log-only until a later reviewed safety milestone explicitly maps head-look intent into camera pan/tilt authority.
+The fake sender does not connect to vehicle hardware. The Windows bridge remains log-only until a later reviewed safety milestone explicitly maps head-look intent into camera pan/tilt authority.
+
+For the consolidated no-hardware workflow, quick command list, and APFPV diagnostic script flow, see `docs/BENCH_TEST_RUNBOOK.md`.
 
 To verify telemetry format compatibility with the iPhone app directly, use the existing telemetry sender:
 

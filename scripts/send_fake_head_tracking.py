@@ -46,6 +46,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Send centered=false for every packet.",
     )
+    parser.add_argument(
+        "--malformed",
+        action="store_true",
+        help="Send one malformed UDP payload and exit.",
+    )
+    parser.add_argument(
+        "--malformed-every",
+        type=int,
+        default=0,
+        help="Send malformed JSON every N packets; 0 disables.",
+    )
     return parser.parse_args()
 
 
@@ -60,6 +71,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise SystemExit("--duration must be non-negative")
     if args.disable_after is not None and args.disable_after < 0:
         raise SystemExit("--disable-after must be non-negative")
+    if args.malformed_every < 0:
+        raise SystemExit("--malformed-every must be non-negative")
 
 
 def values_for_pattern(pattern: str, elapsed: float) -> tuple[float, float, float]:
@@ -105,12 +118,23 @@ def make_packet(
     }
 
 
+def malformed_payload(seq: int) -> bytes:
+    return f'{{"seq": {seq}, "timestamp_ms": {int(time.time() * 1000)}, bad json'.encode(
+        "utf-8"
+    )
+
+
 def main() -> int:
     args = parse_args()
     validate_args(args)
 
     destination = (args.host.strip(), args.port)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if args.malformed:
+        sock.sendto(malformed_payload(1), destination)
+        print(f"sent one malformed head-tracking payload to {destination[0]}:{destination[1]}")
+        return 0
+
     start_time = time.monotonic()
     next_send = start_time
     next_rate_print = start_time + 1.0
@@ -147,7 +171,11 @@ def main() -> int:
                 tracking_enabled=tracking_enabled,
                 centered=not args.uncentered,
             )
-            sock.sendto(json.dumps(last_packet, separators=(",", ":")).encode("utf-8"), destination)
+            if args.malformed_every > 0 and seq % args.malformed_every == 0:
+                payload = malformed_payload(seq)
+            else:
+                payload = json.dumps(last_packet, separators=(",", ":")).encode("utf-8")
+            sock.sendto(payload, destination)
             window_count += 1
             next_send += interval
 
