@@ -13,6 +13,8 @@ The iPhone app does not directly command servos, ESCs, or the gimbal in this mil
 Windows remains the integration point and authority for forwarding head-tracking input into the car-control path.
 Video is a separate future path: the preferred low-latency iPhone Option A is direct APFPV RTP/UDP H.265 from camera to iPhone, not Windows-forwarded or Windows-re-encoded video.
 
+The formal bench-test packet contract is documented in `docs/PROTOCOL_CONTRACT.md`, with JSON schemas in `schemas/` and examples in `examples/`.
+
 ## Architecture
 
 The project is intentionally small and native:
@@ -207,6 +209,7 @@ Example packet:
 
 ```json
 {
+  "protocol_version": 1,
   "timestamp_ms": 12345678,
   "battery_v": 14.8,
   "link_quality": 92,
@@ -257,6 +260,7 @@ When enabled and motion is fresh, the app sends UDP JSON packets to the configur
 
 ```json
 {
+  "protocol_version": 1,
   "seq": 1,
   "timestamp_ms": 1783184400000,
   "yaw_deg": -12.5,

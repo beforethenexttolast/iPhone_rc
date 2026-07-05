@@ -108,6 +108,7 @@ def make_packet(
     centered: bool,
 ) -> dict[str, Any]:
     return {
+        "protocol_version": 1,
         "seq": seq,
         "timestamp_ms": int(time.time() * 1000),
         "yaw_deg": round(yaw_deg, 2),

@@ -72,6 +72,15 @@ def optional_bool(packet: dict[str, Any], key: str) -> bool | None:
     return packet[key]
 
 
+def optional_protocol_version(packet: dict[str, Any]) -> int | None:
+    if "protocol_version" not in packet or packet["protocol_version"] is None:
+        return None
+    version = require_int(packet, "protocol_version")
+    if version != 1:
+        raise ValueError("protocol_version must be 1 when present")
+    return version
+
+
 def require_int(packet: dict[str, Any], key: str) -> int:
     value = packet.get(key)
     if isinstance(value, bool) or not isinstance(value, int):
@@ -95,6 +104,7 @@ def validate_head_tracking_packet(packet: Any) -> dict[str, Any]:
     if not isinstance(packet, dict):
         raise ValueError("packet must be a JSON object")
 
+    protocol_version = optional_protocol_version(packet)
     seq = require_int(packet, "seq")
     timestamp_ms = require_int(packet, "timestamp_ms")
     yaw_deg = require_finite_number(packet, "yaw_deg")
@@ -107,6 +117,7 @@ def validate_head_tracking_packet(packet: Any) -> dict[str, Any]:
         raise ValueError("yaw/pitch/roll outside expected debug range")
 
     return {
+        "protocol_version": protocol_version,
         "seq": seq,
         "timestamp_ms": timestamp_ms,
         "yaw_deg": yaw_deg,
@@ -130,6 +141,7 @@ def make_demo_telemetry(start_time: float, sequence: int) -> dict[str, Any]:
     warning = "" if video_lock else "VIDEO LOCK DROPPED"
 
     return {
+        "protocol_version": 1,
         "timestamp_ms": int(time.time() * 1000),
         "battery_v": round(max(11.5, 16.2 - elapsed * 0.003), 2),
         "link_quality": link_quality,

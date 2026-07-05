@@ -2,6 +2,8 @@
 
 This runbook is the single no-hardware and first-bench-test workflow for the iPhone FPV HUD project. It is intentionally log-only: none of these scripts command vehicle hardware, CRSF channels, servos, ESCs, or the camera gimbal.
 
+The formal UDP/RTP contract is documented in `docs/PROTOCOL_CONTRACT.md`. Example JSON files live in `examples/`, and schemas live in `schemas/`.
+
 ## Script Map
 
 Use one script per purpose:

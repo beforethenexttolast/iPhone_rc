@@ -13,6 +13,9 @@ for path in sorted(Path("scripts").glob("*.py")):
     print(f"ok {path}")
 '
 
+echo "== Protocol example validation =="
+python3 scripts/validate_protocol_examples.py
+
 echo "== Xcode tests =="
 xcodebuild -project FPVHUDApp.xcodeproj \
   -scheme FPVHUDApp \

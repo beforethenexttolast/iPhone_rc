@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/fpvhud/telemetry_snapshot.schema.json",
+  "title": "FPV HUD Telemetry Snapshot",
+  "description": "Windows-normalized telemetry snapshot sent to the iPhone FPV HUD over UDP JSON.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "timestamp_ms",
+    "battery_v",
+    "link_quality",
+    "rssi_dbm",
+    "snr_db",
+    "speed_kmh",
+    "gear",
+    "drive_mode",
+    "ers_percent",
+    "throttle",
+    "brake",
+    "steering",
+    "camera_yaw_deg",
+    "camera_pitch_deg",
+    "head_tracking_mode",
+    "video_lock"
+  ],
+  "properties": {
+    "protocol_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sender timestamp in milliseconds."
+    },
+    "battery_v": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Battery voltage in volts."
+    },
+    "link_quality": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "ELRS/CRSF link quality percentage."
+    },
+    "rssi_dbm": {
+      "type": "integer",
+      "description": "RSSI in dBm."
+    },
+    "snr_db": {
+      "type": "number",
+      "description": "Signal-to-noise ratio in dB."
+    },
+    "speed_kmh": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Vehicle speed in kilometers per hour."
+    },
+    "gear": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "drive_mode": {
+      "type": "string",
+      "enum": ["TRAINING", "GEARBOX", "GEARBOX_ERS", "UNKNOWN"]
+    },
+    "ers_percent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "throttle": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "brake": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "steering": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "camera_yaw_deg": {
+      "type": "number"
+    },
+    "camera_pitch_deg": {
+      "type": "number"
+    },
+    "head_tracking_mode": {
+      "type": "string",
+      "enum": ["OFF", "DS4", "HEAD_TRACKING", "MIXED", "UNKNOWN"]
+    },
+    "video_lock": {
+      "type": "boolean"
+    },
+    "warning": {
+      "type": ["string", "null"],
+      "description": "Empty string or null means no warning."
+    },
+    "stale_data_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["battery", "linkQuality", "speed", "flightMode", "camera", "video", "telemetry"]
+      },
+      "uniqueItems": true
+    },
+    "link_state": {
+      "type": "string",
+      "enum": ["disconnected", "connecting", "connected", "degraded", "demo"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["demo", "udp"]
+    },
+    "test_sequence": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

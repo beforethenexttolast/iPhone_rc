@@ -4,6 +4,8 @@ This guide tests the iPhone companion bridge harness without an iPhone, RC car, 
 
 The bridge is log-only. It does not command vehicle hardware, does not map iPhone head tracking to CRSF channels 9/10, and does not interfere with joystick/control flow.
 
+The packet contract is documented in `docs/PROTOCOL_CONTRACT.md`. The bridge accepts current version 1 head-tracking intent packets, including packets with or without the optional `protocol_version` field.
+
 ## What The Harness Does
 
 - Forwards normalized demo telemetry snapshots to a configured iPhone or iOS Simulator UDP port.

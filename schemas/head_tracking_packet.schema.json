@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/fpvhud/head_tracking_packet.schema.json",
+  "title": "FPV HUD Head Tracking Packet",
+  "description": "Camera-look intent packet sent from iPhone FPV HUD to Windows over UDP JSON.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "seq",
+    "timestamp_ms",
+    "yaw_deg",
+    "pitch_deg",
+    "roll_deg",
+    "tracking_enabled"
+  ],
+  "properties": {
+    "protocol_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sender timestamp in milliseconds."
+    },
+    "yaw_deg": {
+      "type": "number",
+      "minimum": -360,
+      "maximum": 360
+    },
+    "pitch_deg": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "roll_deg": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180
+    },
+    "tracking_enabled": {
+      "type": "boolean"
+    },
+    "centered": {
+      "type": "boolean"
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5000,
+      "description": "Recommended receiver stale timeout in milliseconds."
+    }
+  }
+}

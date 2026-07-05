@@ -54,6 +54,7 @@ def make_packet(start_time: float, sequence: int, profile: str) -> dict[str, Any
         warning = "SIMULATED STALE SOURCE"
 
     packet: dict[str, Any] = {
+        "protocol_version": 1,
         "timestamp_ms": int(time.time() * 1000),
         "battery_v": round(battery, 2),
         "link_quality": lq,
