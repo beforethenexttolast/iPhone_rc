@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var viewModel: FPVHUDViewModel
     @State private var presentationMode: HUDPresentationMode = .drive
 
@@ -31,7 +32,11 @@ struct RootView: View {
         }
         .fpvStatusBarHidden()
         .onAppear {
+            viewModel.setAppForegrounded(scenePhase == .active)
             viewModel.startServicesIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            viewModel.setAppForegrounded(newPhase == .active)
         }
         .fullScreenCover(isPresented: $viewModel.isSettingsPresented) {
             SettingsPanelView(viewModel: viewModel)

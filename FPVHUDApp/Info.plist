@@ -37,7 +37,11 @@
 	<key>MinimumOSVersion</key>
 	<string>$(IPHONEOS_DEPLOYMENT_TARGET)</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>FPV HUD receives local telemetry and can send head-tracking packets to the Windows ground station.</string>
+	<string>FPV HUD receives local telemetry, advertises its telemetry port with Bonjour, and can send head-tracking packets to the Windows ground station.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_w17hud._udp</string>
+	</array>
 	<key>NSMotionUsageDescription</key>
 	<string>FPV HUD uses device motion to send optional head-tracking input to the Windows ground station.</string>
 	<key>UILaunchScreen</key>

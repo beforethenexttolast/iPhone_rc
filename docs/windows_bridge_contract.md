@@ -1,6 +1,6 @@
 # W17 iPhone <-> Windows Bridge Contract
 
-Last updated: 2026-07-08
+Last updated: 2026-07-10
 
 This document defines the W17 integration contract between the existing iPhone FPV HUD / head-tracking app and the future Windows ground-station bridge.
 
@@ -83,6 +83,57 @@ iPhone -> firmware JSON/UDP/CRSF: forbidden
 ```
 
 Firmware should only ever see final, already-arbitrated control channels from the existing Windows/control chain in a later milestone.
+
+## Discovery
+
+Discovery is an addressing convenience for the Windows -> iPhone W2 telemetry stream. It does not add control authority, does not carry telemetry, does not carry head-tracking packets, and does not create any iPhone -> firmware path.
+
+The iPhone HUD may advertise its telemetry receive address with Bonjour/mDNS while the app is foregrounded and its UDP telemetry receiver is listening.
+
+Canonical service definition:
+
+| Item | Value |
+| --- | --- |
+| Service type | `_w17hud._udp.local.` |
+| Instance name | `W17 HUD (<device name>)` |
+| SRV port | The iPhone app's W2 telemetry listen port, default `5601` |
+
+TXT record keys:
+
+| Key | Example | Meaning |
+| --- | --- | --- |
+| `v` | `1` | Discovery/bridge contract version |
+| `role` | `hud` | Advertiser role; receivers should ignore unknown roles |
+| `tport` | `5601` | Telemetry listen port; mirrors the SRV port |
+| `feat` | `w2` or `w2,w3` | Supported bridge features; `w3` means the app can emit head-tracking intent packets when separately configured and safely gated |
+| `dev` | `Vitaliy iPhone` | Short printable ASCII user-facing device label |
+
+Current iPhone advertisement:
+
+- Service type: `_w17hud._udp.local.`
+- Instance name: `W17 HUD (<short device name>)`.
+- SRV port: current telemetry receive port from app settings, default `5601`.
+- TXT: `v=1`, `role=hud`, `tport=<telemetry port>`, `feat=w2,w3`, `dev=<short printable ASCII device name>`.
+
+Receiver behavior:
+
+- Discovery is advisory only.
+- Receivers must treat advertisements as user-confirmed hints, never as authority.
+- Windows may show discovered HUDs as candidate telemetry destinations, but the user should confirm the destination before Windows sends telemetry there.
+- Reachability/config checks remain the ground truth for whether telemetry is actually flowing.
+- A spoofed or stale advertisement must not affect vehicle control, head-tracking authority, CRSF output, servo output, firmware behavior, or failsafe behavior.
+
+Lifecycle:
+
+- The iPhone should advertise only while the app is foregrounded and the UDP telemetry receiver is listening.
+- The iPhone should withdraw the advertisement when the app backgrounds, when telemetry receive is stopped, or when demo-only mode stops the UDP telemetry receiver.
+- The advertisement's SRV port and `tport` TXT value must match the actual telemetry listen port.
+
+Versioning:
+
+- Adding new TXT keys is backward-compatible for version `1`; receivers must ignore unknown TXT keys.
+- Changing the service type, changing existing key meanings, or changing compatibility expectations requires bumping `v`.
+- Future Codex and Windows sessions must not invent discovery fields casually; changes should update this canonical contract first and then be mirrored into the Windows implementation copy.
 
 ## 2. Telemetry Snapshot Contract
 

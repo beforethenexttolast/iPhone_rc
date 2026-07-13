@@ -155,6 +155,12 @@ python3 scripts/send_demo_telemetry.py --host <iphone-wifi-ip> --malformed-once
 python3 scripts/send_demo_telemetry.py --host <iphone-wifi-ip> --malformed-every 10
 ```
 
+### Bonjour Telemetry Discovery
+
+When demo telemetry is off, the app is foregrounded, and the W2 UDP telemetry listener is active, the iPhone advertises `_w17hud._udp.local.` through Bonjour/mDNS. The SRV port and `tport` TXT value use the configured telemetry listen port, default `5601`.
+
+Discovery is advisory only. Windows may offer discovered HUDs as telemetry-destination hints, but the user must confirm the destination. Discovery does not carry telemetry or head-tracking packets, grant control authority, or create an iPhone-to-firmware path. The canonical service and TXT contract is in `docs/windows_bridge_contract.md`.
+
 ### UDP Head-Tracking Sender Test
 
 Run the local receiver on the Mac:

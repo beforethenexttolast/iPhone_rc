@@ -1,7 +1,10 @@
 import Foundation
 import Network
+#if canImport(UIKit)
+import UIKit
+#endif
 
-final class UDPTelemetryReceiver: TelemetrySource {
+final class UDPTelemetryReceiver: TelemetryReceiver {
     var onTelemetry: ((TelemetryState) -> Void)?
     var onStatus: ((TelemetryReceiverStatus) -> Void)?
 
@@ -15,12 +18,13 @@ final class UDPTelemetryReceiver: TelemetrySource {
     private let queue = DispatchQueue(label: "fpvhud.telemetry.udp")
 
     func start(settings: AppSettings) {
-        guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: settings.telemetryPort)) else {
+        let telemetryPort = settings.telemetryPort
+        guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: telemetryPort)) else {
             return
         }
 
         queue.async { [weak self] in
-            self?.startOnQueue(port: port)
+            self?.startOnQueue(port: port, telemetryPort: telemetryPort)
         }
     }
 
@@ -30,7 +34,7 @@ final class UDPTelemetryReceiver: TelemetrySource {
         }
     }
 
-    private func startOnQueue(port: NWEndpoint.Port) {
+    private func startOnQueue(port: NWEndpoint.Port, telemetryPort: Int) {
         stopOnQueue(emitIdle: false)
 
         do {
@@ -44,6 +48,9 @@ final class UDPTelemetryReceiver: TelemetrySource {
             emitStatus(warningText: "Waiting for UDP telemetry")
 
             let listener = try NWListener(using: .udp, on: port)
+            listener.service = TelemetryDiscoveryAdvertisement.listenerService(
+                telemetryPort: telemetryPort
+            )
             listener.newConnectionHandler = { [weak self] connection in
                 guard let self else { return }
                 self.connections.append(connection)
@@ -160,5 +167,72 @@ final class UDPTelemetryReceiver: TelemetrySource {
         adding warning: StaleDataWarning
     ) -> [StaleDataWarning] {
         warnings.contains(warning) ? warnings : warnings + [warning]
+    }
+}
+
+enum TelemetryDiscoveryAdvertisement {
+    static let serviceType = "_w17hud._udp"
+    static let serviceTypeWithDomain = "_w17hud._udp.local."
+    static let contractVersion = "1"
+    static let role = "hud"
+
+    static func listenerService(
+        telemetryPort: Int,
+        deviceName: String = currentDeviceName(),
+        supportsHeadTracking: Bool = true
+    ) -> NWListener.Service {
+        NWListener.Service(
+            name: instanceName(deviceName: deviceName),
+            type: serviceType,
+            domain: nil,
+            txtRecord: NWTXTRecord(
+                txtRecordValues(
+                    telemetryPort: telemetryPort,
+                    deviceName: deviceName,
+                    supportsHeadTracking: supportsHeadTracking
+                )
+            )
+        )
+    }
+
+    static func instanceName(deviceName: String) -> String {
+        "W17 HUD (\(shortDeviceName(deviceName)))"
+    }
+
+    static func txtRecordValues(
+        telemetryPort: Int,
+        deviceName: String,
+        supportsHeadTracking: Bool = true
+    ) -> [String: String] {
+        [
+            "v": contractVersion,
+            "role": role,
+            "tport": String(telemetryPort),
+            "feat": supportsHeadTracking ? "w2,w3" : "w2",
+            "dev": shortDeviceName(deviceName)
+        ]
+    }
+
+    static func shortDeviceName(_ rawName: String) -> String {
+        let ascii = rawName.unicodeScalars.map { scalar -> Character in
+            guard scalar.isASCII, !CharacterSet.controlCharacters.contains(scalar) else {
+                return " "
+            }
+            return Character(scalar)
+        }
+        let trimmed = String(ascii)
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+
+        let fallback = trimmed.isEmpty ? "iPhone" : trimmed
+        return String(fallback.prefix(32))
+    }
+
+    private static func currentDeviceName() -> String {
+        #if canImport(UIKit)
+        UIDevice.current.name
+        #else
+        Host.current().localizedName ?? "iPhone"
+        #endif
     }
 }

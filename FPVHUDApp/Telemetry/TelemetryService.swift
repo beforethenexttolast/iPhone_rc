@@ -6,6 +6,10 @@ protocol TelemetrySource: AnyObject {
     func stop()
 }
 
+protocol TelemetryReceiver: TelemetrySource {
+    var onStatus: ((TelemetryReceiverStatus) -> Void)? { get set }
+}
+
 struct TelemetryReceiverStatus: Equatable {
     var isListening: Bool = false
     var lastPacketReceivedAt: Date?

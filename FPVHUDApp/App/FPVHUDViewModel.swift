@@ -14,7 +14,7 @@ final class FPVHUDViewModel: ObservableObject {
     @Published var mockMotionControls = MockMotionControlState.unavailable
 
     private let demoTelemetry = DemoTelemetrySource()
-    private let udpTelemetry = UDPTelemetryReceiver()
+    private let udpTelemetry: TelemetryReceiver
     private let motionService: MotionService
     private let headTrackingSender = HeadTrackingSender()
     private let apfpvDiagnosticReceiver = APFPVDiagnosticReceiver()
@@ -33,13 +33,16 @@ final class FPVHUDViewModel: ObservableObject {
     private var lastRawTelemetry: TelemetryState?
     private var hasCenteredTracking = false
     private var servicesStarted = false
+    private var isAppForegrounded = true
 
     init(
         motionService: MotionService = MotionServiceFactory.makeDefault(),
-        settingsStore: SettingsStore = SettingsStore()
+        settingsStore: SettingsStore = SettingsStore(),
+        udpTelemetry: TelemetryReceiver = UDPTelemetryReceiver()
     ) {
         self.motionService = motionService
         self.settingsStore = settingsStore
+        self.udpTelemetry = udpTelemetry
         let loadedSettings = settingsStore.load()
         let loadedValidation = AppSettingsValidator.validate(loadedSettings)
         self.settings = loadedValidation.sanitizedSettings ?? .defaults
@@ -53,6 +56,23 @@ final class FPVHUDViewModel: ObservableObject {
         guard !servicesStarted else { return }
         servicesStarted = true
         applyRuntimeSettings()
+    }
+
+    func setAppForegrounded(_ isForegrounded: Bool) {
+        guard isAppForegrounded != isForegrounded else { return }
+        isAppForegrounded = isForegrounded
+
+        guard servicesStarted else { return }
+
+        if isForegrounded {
+            applyRuntimeSettings()
+        } else {
+            udpTelemetry.stop()
+            if !settings.demoModeEnabled {
+                telemetryStatus = .idle
+                refreshTelemetryDisplay()
+            }
+        }
     }
 
     @discardableResult
@@ -95,7 +115,13 @@ final class FPVHUDViewModel: ObservableObject {
                 lastRawTelemetry = nil
             }
             refreshTelemetryDisplay()
-            udpTelemetry.start(settings: settings)
+            if isAppForegrounded {
+                udpTelemetry.start(settings: settings)
+            } else {
+                udpTelemetry.stop()
+                telemetryStatus = .idle
+                refreshTelemetryDisplay()
+            }
         }
 
         motionService.start(updateRateHz: Double(settings.motionUpdateHz))

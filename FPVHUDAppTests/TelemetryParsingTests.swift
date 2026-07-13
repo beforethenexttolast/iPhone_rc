@@ -166,6 +166,85 @@ final class TelemetryParsingTests: XCTestCase {
         XCTAssertEqual(HeadTrackingStatus.error.driveDisplayName, "HEAD STALE")
     }
 
+    func testTelemetryDiscoveryAdvertisementUsesCanonicalBonjourContract() {
+        let txt = TelemetryDiscoveryAdvertisement.txtRecordValues(
+            telemetryPort: 5601,
+            deviceName: "  Vitaliy iPhone  ",
+            supportsHeadTracking: true
+        )
+
+        XCTAssertEqual(TelemetryDiscoveryAdvertisement.serviceType, "_w17hud._udp")
+        XCTAssertEqual(TelemetryDiscoveryAdvertisement.serviceTypeWithDomain, "_w17hud._udp.local.")
+        XCTAssertEqual(TelemetryDiscoveryAdvertisement.instanceName(deviceName: "Vitaliy iPhone"), "W17 HUD (Vitaliy iPhone)")
+        XCTAssertEqual(txt["v"], "1")
+        XCTAssertEqual(txt["role"], "hud")
+        XCTAssertEqual(txt["tport"], "5601")
+        XCTAssertEqual(txt["feat"], "w2,w3")
+        XCTAssertEqual(txt["dev"], "Vitaliy iPhone")
+    }
+
+    func testTelemetryDiscoveryDeviceNameFallbackAndFeatureFlag() {
+        let txt = TelemetryDiscoveryAdvertisement.txtRecordValues(
+            telemetryPort: 6001,
+            deviceName: "\n\t",
+            supportsHeadTracking: false
+        )
+
+        XCTAssertEqual(txt["tport"], "6001")
+        XCTAssertEqual(txt["feat"], "w2")
+        XCTAssertEqual(txt["dev"], "iPhone")
+
+        let longName = "abcdefghijklmnopqrstuvwxyz0123456789"
+        XCTAssertEqual(TelemetryDiscoveryAdvertisement.shortDeviceName(longName).count, 32)
+        XCTAssertEqual(TelemetryDiscoveryAdvertisement.shortDeviceName("Vitaliy’s iPhone"), "Vitaliy s iPhone")
+    }
+
+    @MainActor
+    func testTelemetryReceiverFollowsForegroundPortAndDemoLifecycle() {
+        let defaults = makeIsolatedDefaults()
+        let store = SettingsStore(defaults: defaults)
+        var settings = AppSettings.defaults
+        settings.demoModeEnabled = false
+        settings.telemetryPort = 6001
+        store.save(settings)
+
+        let receiver = TelemetryReceiverSpy()
+        let viewModel = FPVHUDViewModel(
+            motionService: MockMotionService(),
+            settingsStore: store,
+            udpTelemetry: receiver
+        )
+
+        viewModel.setAppForegrounded(false)
+        viewModel.startServicesIfNeeded()
+
+        XCTAssertTrue(receiver.startedSettings.isEmpty)
+        XCTAssertEqual(receiver.stopCount, 1)
+
+        viewModel.setAppForegrounded(true)
+
+        XCTAssertEqual(receiver.startedSettings.map(\.telemetryPort), [6001])
+
+        viewModel.setAppForegrounded(false)
+        XCTAssertEqual(receiver.stopCount, 2)
+
+        var updated = viewModel.settings
+        updated.telemetryPort = 6002
+        XCTAssertTrue(viewModel.applySettings(updated))
+        XCTAssertEqual(receiver.startedSettings.map(\.telemetryPort), [6001])
+        XCTAssertEqual(receiver.stopCount, 3)
+
+        viewModel.setAppForegrounded(true)
+        XCTAssertEqual(receiver.startedSettings.map(\.telemetryPort), [6001, 6002])
+
+        updated = viewModel.settings
+        updated.demoModeEnabled = true
+        XCTAssertTrue(viewModel.applySettings(updated))
+        XCTAssertEqual(receiver.stopCount, 4)
+
+        viewModel.stopNetworking()
+    }
+
     func testMockMotionServiceControlsClampAndReset() {
         let service = MockMotionService()
         service.setMockMotion(yawDeg: 220, pitchDeg: 120, rollDeg: -120)
@@ -1035,6 +1114,22 @@ final class TelemetryParsingTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private final class TelemetryReceiverSpy: TelemetryReceiver {
+        var onTelemetry: ((TelemetryState) -> Void)?
+        var onStatus: ((TelemetryReceiverStatus) -> Void)?
+
+        private(set) var startedSettings: [AppSettings] = []
+        private(set) var stopCount = 0
+
+        func start(settings: AppSettings) {
+            startedSettings.append(settings)
+        }
+
+        func stop() {
+            stopCount += 1
+        }
     }
 
     private func fixtureData(_ name: String) throws -> Data {
