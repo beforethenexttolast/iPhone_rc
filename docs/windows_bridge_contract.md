@@ -1,6 +1,6 @@
 # W17 iPhone <-> Windows Bridge Contract
 
-Last updated: 2026-07-10
+Last updated: 2026-07-14
 
 This document defines the W17 integration contract between the existing iPhone FPV HUD / head-tracking app and the future Windows ground-station bridge.
 
@@ -15,7 +15,7 @@ Hard boundaries:
 - The iPhone sends head-tracking intent only.
 - Windows initially logs iPhone head-tracking only.
 - Windows must not forward iPhone head-tracking to CRSF channels, servos, gimbal, ESC, or vehicle control in the first bridge milestone.
-- Windows may later map validated intent to camera pan/tilt only after a separate safety milestone.
+- Windows may later map validated intent to camera pan/tilt only after a separate safety milestone. The intended production mapper host is an owned/forked `elrs-joystick-control`; Electron remains viewer/configuration/logging only.
 - The iPhone receives normalized telemetry snapshots from Windows.
 - The iPhone must not parse raw CRSF.
 - Firmware must not parse iPhone JSON.
@@ -65,14 +65,13 @@ Purpose: provide optional camera-look intent to Windows for logging now and poss
 Preferred low-latency video path remains independent:
 
 ```text
-APFPV/OpenIPC camera
-  -> RTP/UDP H.265
-  -> iPhone APFPV receiver / depacketizer / decoder in a future milestone
-  -> video surface
-  -> SwiftUI/UIKit HUD overlay
+APFPV/OpenIPC camera — approved baseline H.264 1280×720 60 fps
+  -> RTP/UDP unicast -> iPhone receiver / depacketizer / decoder
+  -> retained RTSP -> Windows MediaMTX/WHEP viewer
+  -> simultaneous usable video on both clients
 ```
 
-Windows does not have to forward or re-encode video for the preferred iPhone path. APFPV diagnostics are packet-statistics only until the native decoder milestone.
+Windows does not forward or re-encode the preferred iPhone path. APFPV diagnostics are packet-statistics only until the native decoder milestone. If hardware cannot sustain the baseline on both clients, the limitation must be escalated; it must not silently become H.265-only, RTP-push-only, or single-receiver behavior. Video remains outside the W2/W3 schema and authority paths.
 
 ### Forbidden Path
 
@@ -192,8 +191,8 @@ For version 1, `protocol_version` is recommended but optional for compatibility.
 | `throttle` | Yes | normalized | `0.0...1.0` | If unknown, omit in partial/test packets |
 | `brake` | Yes | normalized | `0.0...1.0` | If unknown, omit in partial/test packets |
 | `steering` | Yes | normalized | `-1.0...1.0` | If unknown, omit in partial/test packets |
-| `camera_yaw_deg` | Yes | degrees | number | Current camera/gimbal reported yaw, not iPhone authority |
-| `camera_pitch_deg` | Yes | degrees | number | Current camera/gimbal reported pitch, not iPhone authority |
+| `camera_yaw_deg` | Yes | degrees | number | Final commanded/mapped camera yaw mirror; not measured camera aim and not iPhone authority |
+| `camera_pitch_deg` | Yes | degrees | number | Final commanded/mapped camera pitch mirror; not measured camera aim and not iPhone authority |
 | `head_tracking_mode` | Yes | enum | `OFF`, `DS4`, `HEAD_TRACKING`, `MIXED`, `UNKNOWN` | Use `UNKNOWN` if unavailable |
 | `video_lock` | Yes | boolean | `true` / `false` | `false` means no current video lock; it does not prove video path latency |
 | `warning` | Optional | string/null | human-readable status | `""` or `null` means no warning |
@@ -211,6 +210,8 @@ Accepted `stale_data_warnings` values:
 - `video`
 - `telemetry`
 
+For version 1, a coarse camera-command saturation/near-limit notice may be carried in the existing human-readable `warning` field. Receivers must not parse `warning` text as structured safety state. No dedicated near-limit field exists in version 1. Adding one requires a deliberate canonical schema/example revision and Windows mirror update.
+
 ### Telemetry Source Meaning
 
 Windows should normalize from existing sources, for example:
@@ -220,7 +221,9 @@ Windows should normalize from existing sources, for example:
 - CRSF GPS frame `0x02` groundspeed -> `speed_kmh`.
 - CRSF FLIGHTMODE frame `0x21`, such as `G3 M2 E55` -> gear, drive mode, ERS/status fields.
 - Existing control/mixer state -> `throttle`, `brake`, `steering`.
-- Existing camera/gimbal state -> `camera_yaw_deg`, `camera_pitch_deg`, `head_tracking_mode`.
+- Existing final camera/gimbal command state -> `camera_yaw_deg`, `camera_pitch_deg`, `head_tracking_mode`.
+
+`camera_yaw_deg` and `camera_pitch_deg` mirror commanded targets for HUD presentation. They do not prove servo position, mechanism position, successful radio delivery, or camera boresight. A HUD near-limit indication derived from them means command saturation only.
 
 The iPhone must not know or parse those raw upstream protocols.
 
@@ -304,13 +307,13 @@ The packet is camera-look intent only. It is not a servo command, pan/tilt comma
 | --- | --- | --- | --- | --- |
 | `protocol_version` | Recommended | integer | `1` | Missing means version 1 during bench phase |
 | `seq` | Yes | count | integer `>= 0` | Monotonic diagnostics; wrap/restart should be logged, not fatal |
-| `timestamp_ms` | Yes | milliseconds | integer `>= 0` | Sender timestamp; use receive time for stale authority |
+| `timestamp_ms` | Yes | milliseconds | integer `>= 0` | Packet send timestamp for diagnostics; it is not motion-sample time and receive time remains stale authority |
 | `yaw_deg` | Yes | degrees | finite number; schema range `-360...360` | Centered iPhone yaw intent |
 | `pitch_deg` | Yes | degrees | finite number; schema range `-180...180` | Centered iPhone pitch intent |
 | `roll_deg` | Yes | degrees | finite number; schema range `-180...180` | Diagnostic only initially; ignore for pan/tilt |
 | `tracking_enabled` | Yes | boolean | `true` / `false` | User/app tracking intent state |
 | `centered` | Recommended | boolean | `true` / `false` | Must be true before any future active mapping |
-| `timeout_ms` | Recommended | milliseconds | `1...5000`, app default `250` | Sender's suggested stale timeout; Windows may enforce its own configured timeout |
+| `timeout_ms` | Recommended | milliseconds | `1...5000`, app default `250` | Diagnostic sender hint only; it cannot weaken the canonical receiver threshold |
 
 ### Current Axis Conventions
 
@@ -368,11 +371,15 @@ First milestone output rule:
 
 Windows should use local receive time as the authority for freshness.
 
-Default stale timeout:
+Canonical stale boundary:
 
-- Head tracking stale if no valid packet arrives for `> about 300 ms`.
+- Integer receive age `299 ms`: fresh.
+- Integer receive age `300 ms`: fresh.
+- Integer receive age `301 ms`: stale.
 
-Windows may use the packet's `timeout_ms` as a diagnostic hint, but Windows should own the configured receiver timeout. Clock sync between iPhone and Windows must not be required.
+The packet's `timeout_ms` is a diagnostic hint only. It does not override the `300/301 ms` receive-time boundary, and clock sync between iPhone and Windows must not be required.
+
+Before any future active mapping, the iPhone must also stop packet generation when its underlying Core Motion sample is older than `250 ms`. The current `500 ms` local motion-staleness behavior is log-only and is not acceptable evidence for active use. No sample-age field is added in version 1; adding one later requires a deliberate schema/example/mirror revision.
 
 ### Malformed Packet Rejection
 
@@ -477,7 +484,7 @@ Firmware must not:
 - Trust iPhone packets directly.
 - Add an iPhone-specific side channel.
 
-In a future active pan/tilt milestone, firmware should only consume final already-arbitrated control channels from the normal Windows/control chain. The existing pan/tilt CRSF channel behavior remains downstream of Windows authority and safety logic.
+In a future active pan/tilt milestone, firmware should only consume final already-arbitrated control channels from the normal Windows/control chain. The intended mapper host is an owned/forked `elrs-joystick-control`; Electron remains viewer/configuration/logging only. Firmware remains the only producer of physical servo outputs.
 
 ## 7. Compatibility Tests
 
@@ -589,7 +596,7 @@ python3 scripts/send_fake_head_tracking.py --host <windows-host> --port 5602 --d
 Expected:
 
 - Windows logs packets while sender runs.
-- After packets stop, Windows marks state stale after about `300 ms`.
+- Boundary tests classify `299 ms` and `300 ms` receive age as fresh and `301 ms` as stale.
 - No output is produced before, during, or after stale transition in the first milestone.
 
 ### Restart And Calibration Behavior
@@ -619,7 +626,7 @@ The first Windows bridge milestone is complete only when:
 - Windows can receive iPhone/fake-iPhone head-tracking packets.
 - Windows validates schema and semantics.
 - Windows rejects malformed packets without replacing valid state.
-- Windows marks stale head tracking after about `300 ms`.
+- Windows classifies `299 ms` and `300 ms` receive age as fresh and `301 ms` as stale.
 - Windows shows/logs all required diagnostics.
 - iPhone HUD handles stale/lost telemetry safely.
 - No iPhone packet affects joystick flow, CRSF output, servos, gimbal, or vehicle behavior.

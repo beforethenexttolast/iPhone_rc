@@ -1,5 +1,7 @@
 # First Active Pan/Tilt Safety Milestone
 
+Last updated: 2026-07-14
+
 This checklist defines the exact conditions required before iPhone head tracking is allowed to move real camera pan/tilt servos.
 
 This document is not an implementation. It does not authorize CRSF mapping by itself, does not authorize vehicle driving, and does not authorize pan/tilt use while the vehicle is in motion. The first active test is bench-only.
@@ -12,8 +14,9 @@ The goal of the first active milestone is one narrow proof:
 
 ```text
 Fresh, centered, armed iPhone head-look intent
-  -> Windows validation and safety gates
-  -> limited pan/tilt bench output
+  -> elrs-joystick-control validation, arbitration, and safety gates
+  -> final limited CRSF ch9/ch10 targets
+  -> firmware-produced pan/tilt bench output
 ```
 
 Anything beyond that is out of scope.
@@ -34,6 +37,7 @@ All items must be complete and documented before first physical movement:
 - Packet schema validation implemented and tested in Windows.
 - Malformed packet rejection validated.
 - Packet stale behavior validated at the Windows bridge.
+- iPhone local motion-sample freshness is no greater than `250 ms`, and packet generation stops when the sample becomes older.
 - Packet rate and sequence behavior observed.
 - Manual override behavior designed.
 - Operator arm/disarm behavior designed.
@@ -63,7 +67,7 @@ Minimum bench setup:
 Before connecting servos:
 
 - Verify simulated/logged pan/tilt output only.
-- Verify sign, limits, rate limiting, and stale behavior in logs.
+- Verify sign, limits, CRSF-count conversion, rate limiting, virtual-center anti-windup, and stale behavior in logs.
 - Verify manual override suppresses iPhone-derived output.
 
 ## Software Safety Gates
@@ -75,7 +79,7 @@ Every gate must pass before Windows produces any iPhone-derived pan/tilt output:
 - Tracking enabled/accepted in Windows.
 - iPhone has been centered/calibrated.
 - Packet includes `centered == true`.
-- Packet age is fresh, target `<= 300 ms`.
+- Packet receive age is fresh: integer age `299 ms` and `300 ms` are fresh; `301 ms` is stale.
 - Packet schema is valid.
 - Packet sequence/timestamp accepted.
 - Yaw/pitch/roll are finite numbers.
@@ -92,11 +96,11 @@ Every gate must pass before Windows produces any iPhone-derived pan/tilt output:
 - No telemetry/control fault exists.
 - No stale packet state exists.
 
-If any gate fails, output must be disabled immediately.
+If any gate fails, new iPhone-derived contribution must stop immediately. The reviewed mapper may still honor the trusted manual source or issue the rate-limited commanded return-to-center defined below.
 
 ## Required Windows States
 
-Windows should expose clear states before active movement:
+The mapper and Windows diagnostics should expose the same clear states before active movement:
 
 - `disabled`: bridge or feature disabled; no output.
 - `receiving`: valid packets arriving; no output.
@@ -108,7 +112,7 @@ Windows should expose clear states before active movement:
 - `stale`: packet timeout exceeded; fail-safe active.
 - `fault`: invalid config, repeated invalid packets, socket failure, or unsafe condition.
 
-Only `active` may move pan/tilt. Every other state must produce no new iPhone-derived movement.
+Only `active` may accept new iPhone-derived contribution. Other states must not use head intent, although the mapper may honor trusted manual input or issue a reviewed rate-limited safety return.
 
 ## Mapping Plan
 
@@ -129,6 +133,19 @@ Required mapping controls:
 - Smoothing for small IMU jitter.
 - Output rate limiting.
 - Optional gain/scaling per axis.
+- Bounded hybrid position/rate virtual center with anti-windup.
+- Explicit calibrated degrees-to-CRSF-count conversion.
+- One rate limiter that remains active across every authority transition.
+
+Hybrid/recenter rules:
+
+- Near neutral, head position maps around a bounded virtual camera center.
+- Near the comfortable head limit, the edge-rate region advances that virtual center.
+- Anti-windup prevents the virtual center from accumulating beyond calibrated command limits.
+- Controller recenter accepts the current head pose as neutral and re-seeds the virtual center from the current authoritative commanded target, not measured camera aim.
+- Recenter clears accumulated edge-rate displacement and must be bumpless.
+- Stale, disarm, and mapper fault discard the virtual center and invoke the rate-limited `992` center command.
+- Manual override discards the virtual center and gives the trusted manual source authority; head control later requires recenter/rearm.
 
 Initial recommended limits:
 
@@ -140,35 +157,33 @@ Roll must be logged only. Roll must not affect pan or tilt in the first active m
 
 ## Fail-Safe Choice
 
-Chosen first-milestone fail-safe: disable iPhone-derived output and return to center at a controlled rate where the mechanism supports safe centering.
+Chosen first-milestone fail-safe: disable iPhone-derived contribution, discard the active virtual center, and command a controlled, rate-limited return to CRSF `992` on both pan and tilt whenever the mapper-to-firmware command path remains operational.
 
 Rationale:
 
 - Holding an unknown stale command can leave the camera pointed at an unintended extreme.
 - Snapping immediately to center can produce sudden movement.
-- Disabling output alone may leave some servo systems holding the last command.
+- Disabling iPhone contribution alone may leave some servo systems holding the last command.
 - Controlled return-to-center is easiest to observe and reason about during bench testing.
 
-Fallback if controlled centering is not implemented or not safe for the mechanism:
-
-- Disable iPhone-derived output and hold the last known safe command for a short bounded interval, then require manual/operator intervention.
+CRSF `992` is the commanded center anchor, not proof of measured camera aim. A radio, CRSF, firmware, servo-power, or mechanical failure may prevent the command from reaching or moving the mechanism. Those failure layers must be distinguished in logs and test results; this checklist does not claim that software can center an unreachable actuator.
 
 Fail-safe triggers:
 
-- No valid packet for more than configured timeout.
+- No valid packet at integer receive age `301 ms` or greater; `300 ms` remains fresh.
 - iPhone app closed or stops sending.
 - Wi-Fi disconnect.
 - Tracking disabled.
 - Calibration reset.
 - `centered != true`.
 - Operator disarm.
-- Manual override.
+- Manual override: discard the head-tracking virtual center; the trusted manual source remains authoritative instead of being replaced by the `992` fail-safe command.
 - Invalid packet.
 - Repeated malformed packets.
 - Bridge fault.
 - Invalid output configuration.
 
-Fail-safe behavior must be visible in Windows logs/UI.
+Fail-safe behavior must be visible in Windows logs/UI. Reconnection or fault recovery must never restore head authority without deliberate recenter and rearm.
 
 ## First Movement Test Sequence
 
@@ -215,7 +230,8 @@ Checks:
 - Move yaw slightly.
 - Confirm pan servo moves slowly in expected direction.
 - Return phone to center.
-- Confirm servo returns toward center smoothly.
+- Confirm servo returns toward the current virtual-center target smoothly; it must not be assumed to return to mechanical center after edge-rate displacement.
+- Trigger controller recenter and confirm there is no jump.
 - Move pitch slightly.
 - Confirm tilt servo moves slowly in expected direction.
 - Trigger stale packet by stopping app or blocking packets.
