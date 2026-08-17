@@ -46,6 +46,13 @@ struct DebugHUDView: View {
                     .padding(.top, max(proxy.safeAreaInsets.top + 10, 14))
                     .padding(.horizontal, horizontalPadding)
 
+                    // Same priority rule as Drive: the low-battery banner is
+                    // additive, pinned above the scrolling panels; the panels'
+                    // own DebugWarning rows are untouched by it.
+                    LowBatteryBanner(telemetry: viewModel.telemetryDisplay)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, horizontalPadding)
+
                     ScrollView {
                         LazyVGrid(columns: debugColumns(for: contentWidth), alignment: .leading, spacing: 12) {
                             DebugPanel(title: "Motion") {
@@ -529,12 +536,20 @@ private struct DriveHUDView: View {
             .padding(.top, max(safeArea.top + 62, 72))
             .padding(.trailing, horizontalInset)
 
-            if let warning = warningText {
-                WarningBanner(text: warning, linkState: telemetry.linkState)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, max(safeArea.top + 58, 70))
-                    .padding(.horizontal, horizontalInset)
+            // Banner priority rule: the low-battery banner owns its own slot
+            // stacked ABOVE the shared warning slot. It never replaces or
+            // suppresses link/stale warnings, and they never suppress it —
+            // its visibility comes solely from the classifier level, which the
+            // view model already clears when telemetry is lost.
+            VStack(spacing: 8) {
+                LowBatteryBanner(telemetry: telemetry)
+                if let warning = warningText {
+                    WarningBanner(text: warning, linkState: telemetry.linkState)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, max(safeArea.top + 58, 70))
+            .padding(.horizontal, horizontalInset)
         }
         .ignoresSafeArea(edges: .all)
     }
@@ -676,11 +691,19 @@ private struct TopTelemetryStrip: View {
     }
 
     private var batteryColor: Color {
-        guard telemetry.showsLiveValues, let voltage = telemetry.rawTelemetry?.batteryVoltage else {
+        guard telemetry.showsLiveValues, telemetry.rawTelemetry != nil else {
             return HUDPalette.muted
         }
 
-        return voltage < 7.2 ? HUDPalette.red : .white
+        // Same classifier level as the banner (ground-station parity: 7.0 V
+        // warn / 6.6 V critical on the pack, with hysteresis). Replaces the
+        // retired one-off `< 7.2 V -> red` cutoff so the BAT tint and the
+        // banner can never disagree.
+        switch telemetry.lowBattery {
+        case .critical: return HUDPalette.red
+        case .warn: return HUDPalette.amber
+        case .ok: return .white
+        }
     }
 
     private var linkQualityColor: Color {
@@ -833,9 +856,42 @@ private struct HeadTrackingStatusChip: View {
     }
 }
 
+/// GS-parity low-battery banner, shared by the Drive and Debug HUDs. Hidden at
+/// `.ok`; amber at warn, red at critical (matching the BAT metric tint). While
+/// the classified value is stale (1–3 s tier, or a Windows-flagged stale
+/// battery) the banner stays up but dims — visible-but-degraded, like every
+/// other stale value on the HUD; when telemetry is lost the classifier itself
+/// clears and the banner disappears with the cleared values.
+private struct LowBatteryBanner: View {
+    var telemetry: TelemetryDisplayState
+
+    var body: some View {
+        if let text = telemetry.lowBattery.bannerText {
+            WarningBanner(
+                text: text,
+                tint: telemetry.lowBattery == .critical ? HUDPalette.red : HUDPalette.amber
+            )
+            .opacity(telemetry.lowBatteryValueIsStale ? 0.55 : 1)
+        }
+    }
+}
+
 private struct WarningBanner: View {
     var text: String
-    var linkState: LinkState
+    var tint: Color
+
+    init(text: String, linkState: LinkState) {
+        self.text = text
+        switch linkState {
+        case .disconnected, .degraded: self.tint = HUDPalette.red
+        case .demo, .connecting, .connected: self.tint = HUDPalette.amber
+        }
+    }
+
+    init(text: String, tint: Color) {
+        self.text = text
+        self.tint = tint
+    }
 
     var body: some View {
         Text(text)
@@ -846,20 +902,13 @@ private struct WarningBanner: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
             .background(.black.opacity(0.42))
-            .foregroundStyle(warningColor)
+            .foregroundStyle(tint)
             .overlay(
                 Capsule()
-                    .stroke(warningColor.opacity(0.78), lineWidth: 1)
+                    .stroke(tint.opacity(0.78), lineWidth: 1)
             )
             .clipShape(Capsule())
-            .shadow(color: warningColor.opacity(0.26), radius: 10)
-    }
-
-    private var warningColor: Color {
-        switch linkState {
-        case .disconnected, .degraded: return HUDPalette.red
-        case .demo, .connecting, .connected: return HUDPalette.amber
-        }
+            .shadow(color: tint.opacity(0.26), radius: 10)
     }
 }
 

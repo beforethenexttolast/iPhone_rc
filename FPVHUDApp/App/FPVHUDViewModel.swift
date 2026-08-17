@@ -31,6 +31,7 @@ final class FPVHUDViewModel: ObservableObject {
     private let motionStatusQueue = DispatchQueue(label: "fpvhud.motion.status.timer")
     private let headTrackingSendQueue = DispatchQueue(label: "fpvhud.headtracking.send.timer")
     private var lastRawTelemetry: TelemetryState?
+    private var lowBatteryClassifier = LowBatteryClassifier()
     private var hasCenteredTracking = false
     private var servicesStarted = false
     private var isAppForegrounded = true
@@ -261,11 +262,23 @@ final class FPVHUDViewModel: ObservableObject {
     }
 
     private func refreshTelemetryDisplay() {
-        telemetryDisplay = TelemetryDisplayState.make(
+        var display = TelemetryDisplayState.make(
             rawTelemetry: lastRawTelemetry,
             receiverStatus: telemetryStatus,
             settings: settings
         )
+        // Live values classify; the stale tier holds the last level (banner
+        // dims); lost/placeholder telemetry clears it. The 250 ms display
+        // timer re-runs this as freshness decays, so the banner follows the
+        // same tiers as every other value on the HUD.
+        lowBatteryClassifier.update(
+            packVoltage: display.rawTelemetry?.batteryVoltage,
+            showsLiveValues: display.showsLiveValues,
+            freshness: display.freshness,
+            batteryFlaggedStale: display.staleDataWarnings.contains(.battery)
+        )
+        display.lowBattery = lowBatteryClassifier.level
+        telemetryDisplay = display
     }
 
     private func clearRawTelemetryForModeChangeIfNeeded() {

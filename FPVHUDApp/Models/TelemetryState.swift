@@ -74,6 +74,19 @@ struct TelemetryDisplayState: Equatable {
     var staleDataWarnings: [StaleDataWarning]
     var showsLiveValues: Bool
 
+    /// Ground-station-parity low-battery level, stamped by the view model's
+    /// stateful classifier after `make(...)` (hysteresis needs memory, so the
+    /// pure builder cannot compute it). Defaults to `.ok` for placeholders.
+    var lowBattery: LowBatteryLevel = .ok
+
+    /// True when the classified battery value is no longer provably live: the
+    /// stale display tier (1–3 s) or a Windows-flagged stale battery value.
+    /// The banner and BAT tint stay up but dim, matching how stale values stay
+    /// visible-but-degraded elsewhere on the HUD.
+    var lowBatteryValueIsStale: Bool {
+        freshness == .staleWarning || staleDataWarnings.contains(.battery)
+    }
+
     static let unknown = placeholder(
         rawTelemetry: nil,
         linkState: .disconnected,

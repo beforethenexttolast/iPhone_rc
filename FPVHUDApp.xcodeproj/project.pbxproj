@@ -32,6 +32,8 @@
 		0A0001010000000000000017 /* AppIcon60x60@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001A /* AppIcon60x60@2x.png */; };
 		0A0001010000000000000018 /* AppIcon60x60@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001B /* AppIcon60x60@3x.png */; };
 		0A0001010000000000000019 /* APFPVDiagnosticReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001C /* APFPVDiagnosticReceiver.swift */; };
+		0A000101000000000000001A /* LowBatteryClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001D /* LowBatteryClassifier.swift */; };
+		0A000101000000000000001B /* LowBatteryClassifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000201000000000000001E /* LowBatteryClassifierTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +75,8 @@
 		0A000201000000000000001A /* AppIcon60x60@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@2x.png"; sourceTree = "<group>"; };
 		0A000201000000000000001B /* AppIcon60x60@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@3x.png"; sourceTree = "<group>"; };
 		0A000201000000000000001C /* APFPVDiagnosticReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APFPVDiagnosticReceiver.swift; sourceTree = "<group>"; };
+		0A000201000000000000001D /* LowBatteryClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowBatteryClassifier.swift; sourceTree = "<group>"; };
+		0A000201000000000000001E /* LowBatteryClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowBatteryClassifierTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +184,7 @@
 			children = (
 				0A000201000000000000000C /* TelemetryService.swift */,
 				0A000201000000000000000D /* DemoTelemetrySource.swift */,
+				0A000201000000000000001D /* LowBatteryClassifier.swift */,
 			);
 			path = Telemetry;
 			sourceTree = "<group>";
@@ -242,6 +247,7 @@
 			isa = PBXGroup;
 			children = (
 				0A0002010000000000000016 /* TelemetryParsingTests.swift */,
+				0A000201000000000000001E /* LowBatteryClassifierTests.swift */,
 			);
 			path = FPVHUDAppTests;
 			sourceTree = "<group>";
@@ -376,6 +382,7 @@
 				0A0001010000000000000013 /* VideoSurface.swift in Sources */,
 				0A0001010000000000000014 /* FutureRTPHEVCReceiver.swift in Sources */,
 				0A0001010000000000000019 /* APFPVDiagnosticReceiver.swift in Sources */,
+				0A000101000000000000001A /* LowBatteryClassifier.swift in Sources */,
 				0A0001010000000000000015 /* Formatters.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -385,6 +392,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A0001010000000000000016 /* TelemetryParsingTests.swift in Sources */,
+				0A000101000000000000001B /* LowBatteryClassifierTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
