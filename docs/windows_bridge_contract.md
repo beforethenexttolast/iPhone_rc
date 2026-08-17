@@ -1,6 +1,6 @@
 # W17 iPhone <-> Windows Bridge Contract
 
-Last updated: 2026-07-14
+Last updated: 2026-08-17 (Discovery: explicit receiver acceptance policy, v1-compatible clarification)
 
 This document defines the W17 integration contract between the existing iPhone FPV HUD / head-tracking app and the future Windows ground-station bridge.
 
@@ -99,13 +99,13 @@ Canonical service definition:
 
 TXT record keys:
 
-| Key | Example | Meaning |
-| --- | --- | --- |
-| `v` | `1` | Discovery/bridge contract version |
-| `role` | `hud` | Advertiser role; receivers should ignore unknown roles |
-| `tport` | `5601` | Telemetry listen port; mirrors the SRV port |
-| `feat` | `w2` or `w2,w3` | Supported bridge features; `w3` means the app can emit head-tracking intent packets when separately configured and safely gated |
-| `dev` | `Vitaliy iPhone` | Short printable ASCII user-facing device label |
+| Key | Required | Example | Meaning |
+| --- | --- | --- | --- |
+| `v` | Yes | `1` | Discovery/bridge contract version; must be `1` for this revision |
+| `role` | No | `hud` | Advertiser role; if present it must be `hud` (case-insensitive) or the advertisement is declined |
+| `tport` | No | `5601` | Telemetry listen port; mirrors the SRV port |
+| `feat` | No | `w2` or `w2,w3` | Supported bridge features; `w3` means the app can emit head-tracking intent packets when separately configured and safely gated |
+| `dev` | No | `Vitaliy iPhone` | Short printable ASCII user-facing device label; advisory/display only |
 
 Current iPhone advertisement:
 
@@ -121,6 +121,25 @@ Receiver behavior:
 - Windows may show discovered HUDs as candidate telemetry destinations, but the user should confirm the destination before Windows sends telemetry there.
 - Reachability/config checks remain the ground truth for whether telemetry is actually flowing.
 - A spoofed or stale advertisement must not affect vehicle control, head-tracking authority, CRSF output, servo output, firmware behavior, or failsafe behavior.
+
+Receiver acceptance policy (v1-compatible clarification, added 2026-08-17):
+
+This subsection makes the version-1 TXT acceptance rules explicit for receiver
+implementations. It is a receiver-policy clarification only: it changes no advertiser
+behavior, no service definition, no TXT key, and no wire format. The current iPhone
+advertisement described above already conforms unchanged.
+
+- `v` is REQUIRED and must be exactly `1`. An advertisement that omits `v` or carries
+  any other value must be declined as an unsupported version.
+- `role` is optional. If present it must equal `hud` case-insensitively; any other
+  value must be declined. If absent, the advertisement is acceptable.
+- `tport` is optional. If present it must equal the SRV port; a mismatch must be
+  declined rather than guessing which port is real. If absent, the SRV port alone is
+  authoritative.
+- `feat` is optional. Unknown tokens must be ignored, not rejected. Known version-1
+  tokens: `w2`, `w3`.
+- `dev` is optional and advisory (display only). Receivers may clamp it to 32
+  printable-ASCII characters.
 
 Lifecycle:
 
