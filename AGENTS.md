@@ -1,5 +1,9 @@
 # AGENTS.md
 
+> Corrected 2026-08-17: this repo transferred from ChatGPT Codex to Claude Code.
+> The Ownership Split section below reflects the transfer; the rest of this file
+> still applies to any session working here.
+
 ## Repo Scope
 - `iPhone_rc` is the W17 iPhone FPV HUD app.
 - The iPhone is a thin HUD/client.
@@ -10,8 +14,10 @@
 - Firmware is separate and remains unaware of iPhone UDP/JSON.
 
 ## Ownership Split
-- ChatGPT Codex owns and maintains this `iPhone_rc` repo.
-- Claude Code owns and maintains:
+- Claude Code owns and maintains this `iPhone_rc` repo (since 2026-08-17).
+- A ChatGPT Codex session working here is a guest: read-only unless the owner's
+  task explicitly names this repo.
+- Claude Code also owns and maintains:
   - `w17-control-fw`
   - `w17-ground-station`
   - `w17-soundlight-fw`
