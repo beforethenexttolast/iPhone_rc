@@ -289,6 +289,16 @@ Lost telemetry:
   - source/mode -> `UNKNOWN` or `--`
 - HUD may hold only non-authoritative debug metadata if clearly marked stale.
 
+### Deliberate Cross-Client Divergence On Loss (owner-ratified 2026-08-20)
+
+The two viewers intentionally behave differently when a stream dies, and this is a
+decision, not drift: the **iPhone clears to placeholders** (the rules above — a phone
+glanced at from the couch must say "no signal" unambiguously, with no plausible-looking
+stale numbers), while the **ground station holds the last frame dimmed under a
+stream-lost banner** (a laptop operator is diagnosing, and the last-known state is
+diagnostic context). Do not "fix" one side to match the other; a future change to either
+policy is an owner decision and must be made deliberately on both sides of the mirror.
+
 ## 3. Head-Tracking Intent Contract
 
 Direction: iPhone -> Windows.
